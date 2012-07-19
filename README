@@ -1,0 +1,8 @@
+dacrtGPU. A Divide and Conquer RayTracer as described by Benjamin Mora
+implemented on the GPU using CUDA and Thrust.
+
+Compile ./make
+Usage: ./build/dacrtGPU 2 2 && xv image.ppm
+
+The first argument is the number of rays pr. pixel and the second is the number
+of iterations.
