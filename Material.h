@@ -19,6 +19,9 @@ struct Material {
     float3 emission, color;
     float reflection, refraction;
     
+    Material(const float3& emission, const float3& color, const float reflection, const float refraction) 
+        : emission(emission), color(color), reflection(reflection), refraction(refraction) {}
+
     Material(const float4& emission_reflection, const float4& color_refraction)
         : emission(make_float3(emission_reflection)), reflection(emission_reflection.w),
           color(make_float3(color_refraction)), refraction(color_refraction.w) {}
@@ -33,7 +36,7 @@ inline std::ostream& operator<<(std::ostream& s, const Material& mat){
 
 
 class Materials {
-private:
+public:
     thrust::device_vector<float4> emission_reflection;
     thrust::device_vector<float4> color_refraction;
     
@@ -45,6 +48,7 @@ public:
         color_refraction.resize(0);
     }
 
+    inline size_t Size() const { return emission_reflection.size(); }
     inline void Resize(const size_t size) {
         emission_reflection.resize(size);
         color_refraction.resize(size);
@@ -53,7 +57,8 @@ public:
     inline Material Get(const size_t i) const {
         return Material(emission_reflection[i], color_refraction[i]);
     }
-    inline void Set(const size_t i, const Material mat) {
+    inline void Set(const size_t i, const Material& mat) {
+        if (Size() <= i) Resize(i+1);
         emission_reflection[i] = make_float4(mat.emission, mat.reflection);
         color_refraction[i] = make_float4(mat.color, mat.refraction);
     }

@@ -34,9 +34,9 @@ using std::endl;
 //const int WIDTH = 8, HEIGHT = 8;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-//const int WIDTH = 128, HEIGHT = 128;
+const int WIDTH = 128, HEIGHT = 128;
 //const int WIDTH = 256, HEIGHT = 256;
-const int WIDTH = 512, HEIGHT = 512;
+//const int WIDTH = 512, HEIGHT = 512;
 int sqrtSamples;
 int samples;
 
@@ -189,8 +189,8 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
 
         // cout << PrintHits(hitIDs, WIDTH, HEIGHT) << endl;
 
-        Shading::Normals(rays.BeginLeafRays(), rays.EndLeafRays(), 
-                         sphereIndices.spheres, hitIDs, rayFrags);
+        Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
+                       sphereIndices.spheres, rayFrags);
 
         rays.RemoveTerminated(hitIDs);
 
@@ -246,7 +246,6 @@ int main(int argc, char *argv[]){
     int iterations = argc >= 3 ? atoi(argv[2]) : 1; // # iterations
 
     Fragments frags(WIDTH * HEIGHT * samples);
-    thrust::fill(frags.emissionDepth.begin(), frags.emissionDepth.end(), make_float4(0.5f, 0.0f, 1.0f, 0.0f));
     thrust::device_vector<float4> colors(WIDTH * HEIGHT);
 
     SpheresGeometry geom = SpheresGeometry::CornellBox(30);

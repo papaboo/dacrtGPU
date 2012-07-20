@@ -28,16 +28,29 @@ std::string SphereGeometry::ToString() const {
 
 
 SpheresGeometry SpheresGeometry::CornellBox(const int n) {
-    thrust::device_vector<Sphere> hSpheres(9 + n);
-    hSpheres[0] = Sphere(make_float3(1e5f+1.0f, 40.8f ,81.6f), 1e5f);
-    hSpheres[1] = Sphere(make_float3(-1e5+99, 40.8, 81.6), 1e5);
-    hSpheres[2] = Sphere(make_float3(50,40.8, 1e5), 1e5);
-    hSpheres[3] = Sphere(make_float3(50, 40.8, -1e5+170), 1e5);
-    hSpheres[4] = Sphere(make_float3(50, 1e5, 81.6), 1e5);
-    hSpheres[5] = Sphere(make_float3(50, -1e5+81.6, 81.6), 1e5);
-    hSpheres[6] = Sphere(make_float3(50,681.6-.27,81.6), 600);
-    hSpheres[7] = Sphere(make_float3(73,16.5,78), 16.5);
-    hSpheres[8] = Sphere(make_float3(27,16.5,47), 16.5);
+    // Create materials
+    Materials mats(6);
+    mats.Resize(6);
+    float3 zero3 = make_float3(0.0f, 0.0f, 0.0f);
+    mats.Set(0, Material(zero3, make_float3(0.75f, 0.75f, 0.75f), 0.0f, 0.0f)); // light grey
+    mats.Set(1, Material(zero3, make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red wall
+    mats.Set(2, Material(zero3, make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue wall
+    mats.Set(3, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 0.0f, 1.0f)); // glass ball
+    mats.Set(4, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 1.0f, 0.0f)); // mirror ball
+    mats.Set(5, Material(make_float3(12.0f,12.0f,12.0f), zero3, 0.0f, 0.0f)); // light
+
+    // Create geometry
+    thrust::host_vector<Sphere> hSpheres(9 + n);
+    thrust::host_vector<unsigned int> hMatIDs(9 + n);
+    hSpheres[0] = Sphere(make_float3(1e5f+1.0f, 40.8f ,81.6f), 1e5f); hMatIDs[0] = 1;
+    hSpheres[1] = Sphere(make_float3(-1e5+99, 40.8, 81.6), 1e5);      hMatIDs[1] = 2;
+    hSpheres[2] = Sphere(make_float3(50,40.8, 1e5), 1e5);             hMatIDs[2] = 0;
+    hSpheres[3] = Sphere(make_float3(50, 40.8, -1e5+170), 1e5);       hMatIDs[3] = 0;
+    hSpheres[4] = Sphere(make_float3(50, 1e5, 81.6), 1e5);            hMatIDs[4] = 0;
+    hSpheres[5] = Sphere(make_float3(50, -1e5+81.6, 81.6), 1e5);      hMatIDs[5] = 0;
+    hSpheres[6] = Sphere(make_float3(50,681.6-.27,81.6), 600);        hMatIDs[6] = 5;
+    hSpheres[7] = Sphere(make_float3(73,16.5,78), 16.5);              hMatIDs[7] = 3;
+    hSpheres[8] = Sphere(make_float3(27,16.5,47), 16.5);              hMatIDs[8] = 4;
     
     for (int s = 0; s < n; ++s) {
         float radius = 1.25f + 1.75f * Rand01();
@@ -45,7 +58,7 @@ SpheresGeometry SpheresGeometry::CornellBox(const int n) {
         hSpheres[9 + s] = Sphere(center, radius);
     }
     
-    return SpheresGeometry(hSpheres);
+    return SpheresGeometry(hSpheres, hMatIDs, mats);
 }
 
 std::string SpheresGeometry::ToString() const {

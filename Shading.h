@@ -18,11 +18,17 @@ class SpheresGeometry;
 
 class Shading {
 public:
+
     static void Normals(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
+                        thrust::device_vector<unsigned int>::iterator hitIDs,
                         SpheresGeometry& spheres,
-                        thrust::device_vector<unsigned int>& hitIDs,
                         Fragments& frags);
 
+    static void Shade(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
+                      thrust::device_vector<unsigned int>::iterator hitIDs,
+                      SpheresGeometry& spheres,
+                      Fragments& frags);
+    
 };
 
 #endif // _GPU_DACRT_SHADING_H_

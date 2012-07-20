@@ -9,6 +9,7 @@
 #ifndef _GPU_DACRT_SPHERE_GEOMETRY_H_
 #define _GPU_DACRT_SPHERE_GEOMETRY_H_
 
+#include <Material.h>
 #include <Sphere.h>
 #include <Utils.h>
 
@@ -39,17 +40,24 @@ inline std::ostream& operator<<(std::ostream& s, const SphereGeometry& sg){
 
 class SpheresGeometry {
 public:
-    // TODO add materials and a zip_iterator, otherwise this is a very silly thin wrapper
+    typedef thrust::zip_iterator<thrust::tuple<thrust::device_vector<Sphere>::iterator, 
+                                               UintIterator> > Iterator;
 
     thrust::device_vector<Sphere> spheres; // [x, y, z, radius]
+    thrust::device_vector<unsigned int> materialIDs;
+    Materials materials;
 
     const static unsigned int MISSED = 2147483647;
 
     SpheresGeometry(const size_t size)
-        : spheres(thrust::device_vector<Sphere>(size)) {}
+        : spheres(thrust::device_vector<Sphere>(size)),
+          materialIDs(thrust::device_vector<unsigned int>(size)),
+          materials(0) {}
 
-    SpheresGeometry(const thrust::host_vector<Sphere>& hostSpheres) 
-        : spheres(hostSpheres) {}
+    SpheresGeometry(const thrust::host_vector<Sphere>& hostSpheres,
+                    const thrust::host_vector<unsigned int>& hostMatIDs,
+                    Materials& mats)
+        : spheres(hostSpheres), materialIDs(hostMatIDs), materials(mats) {}
 
     inline size_t Size() const { return spheres.size(); }
 
@@ -60,8 +68,15 @@ public:
         spheres[i] = s.s;
     }
 
-    thrust::device_vector<Sphere>::iterator BeginSpheres() { return spheres.begin(); }
-    thrust::device_vector<Sphere>::iterator EndSpheres() { return spheres.end(); }
+    inline thrust::device_vector<Sphere>::iterator BeginSpheres() { return spheres.begin(); }
+    inline thrust::device_vector<Sphere>::iterator EndSpheres() { return spheres.end(); }
+
+    inline Iterator Begin() { 
+        return thrust::make_zip_iterator(thrust::make_tuple(spheres.begin(), materialIDs.begin()));
+    }
+    inline Iterator End() { 
+        return thrust::make_zip_iterator(thrust::make_tuple(spheres.end(), materialIDs.end()));
+    }
 
     /**
      * Creates a Cornell Box scene with 2 large spheres and n random ones. Sets
