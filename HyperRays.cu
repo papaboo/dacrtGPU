@@ -24,7 +24,7 @@ std::string HyperRay::ToString() const {
 
 
 
-float2 RandomFloat2() {
+inline float2 RandomFloat2() {
     float x = (float)rand() / (float)RAND_MAX;
     float y = (float)rand() / (float)RAND_MAX;
     return make_float2(x, y);
