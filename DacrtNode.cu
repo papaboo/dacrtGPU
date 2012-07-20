@@ -666,7 +666,7 @@ struct SetMarkers {
     __host__ __device__
     void operator()(const unsigned int threadId) const {
         const uint2 part = partitions[threadId];
-        owners[part.x] = threadId;
+        owners[part.x] = threadId == 0 ? 0 : 1;
     }
 };
 
@@ -688,12 +688,8 @@ void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
     thrust::for_each(threadIds, threadIds + nodes, setMarkers);
     // std::cout << "markers:\n" << owners << std::endl;
 
-    // TODO bring back to the GPU
-    // thrust::inclusive_scan(owners.begin(), owners.end(), owners.begin());
-    thrust::host_vector<unsigned int> host_owners = owners;
-    for(int i = 1; i < host_owners.size(); ++i)
-        if (0 == host_owners[i]) host_owners[i] = host_owners[i-1];
-    owners = host_owners;
+    thrust::inclusive_scan(owners.begin(), owners.end(), owners.begin());
+
     // std::cout << "owners:\n" << owners << std::endl;
 }
 
