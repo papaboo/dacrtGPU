@@ -355,7 +355,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // Calculate the new hypercubes 
     /// TODO? Since the rays have been scattered, just reduce them, but that
     // would mean also scattering the hypercubes when creating leaves.
-    HyperCubes splitCubes(cubes.Size() * 2);
+    static HyperCubes splitCubes(cubes.Size() * 2);
     splitCubes.DestructiveResize(cubes.Size() * 2);
     CubesFromSplitPlanes cubesFromSplitPlanes(cubes, splitAxis, splitValues);
     thrust::transform(thrust::counting_iterator<unsigned int>(0), thrust::counting_iterator<unsigned int>(cubes.Size() * 2), 
