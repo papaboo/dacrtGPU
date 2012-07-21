@@ -117,6 +117,10 @@ public:
         origins.resize(size);
         axisUVs.resize(size);
     }
+    inline void Swap(HyperRays& rays) {
+        origins.swap(rays.origins);
+        axisUVs.swap(rays.axisUVs);
+    }
 
     inline HyperRay Get(const size_t i) const {
         return HyperRay(origins[i], axisUVs[i]);

@@ -12,20 +12,18 @@
 #include <HyperRays.h>
 
 class RayContainer {
-    HyperRays hyperRays1;
-    HyperRays hyperRays2;
-
-    HyperRays& innerRays;
-    HyperRays& nextRays;
+    HyperRays innerRays;
+    HyperRays nextRays;
 
     HyperRays leafRays;
 
 public:
     RayContainer(const int width, const int height, const int sqrtSamples)
-        : hyperRays1(width, height, sqrtSamples), hyperRays2(0), 
-          innerRays(hyperRays1), 
-          nextRays(hyperRays2), 
-          leafRays(0) {}
+        : innerRays(width, height, sqrtSamples), 
+          nextRays(innerRays.Size()), 
+          leafRays(innerRays.Size()) {
+        nextRays.Resize(0); leafRays.Resize(0);
+    }
 
     void Clear();
 

@@ -19,11 +19,8 @@
 #include <sstream>
 
 void RayContainer::Clear() {
-    hyperRays1.Resize(0);
-    hyperRays2.Resize(0);
-    
-    innerRays = hyperRays1; 
-    nextRays = hyperRays2; 
+    innerRays.Resize(0);
+    nextRays.Resize(0);
     
     leafRays.Resize(0);
 }
@@ -91,7 +88,7 @@ void RayContainer::Partition(thrust::device_vector<PartitionSide>& partitionSide
     thrust::transform(input, input + nextSize, thrust::counting_iterator<unsigned int>(0), 
                       leftIndices.begin(), partitionLeft);
 
-    std::swap(innerRays, nextRays);
+    innerRays.Swap(nextRays);
 }
 
 
@@ -170,7 +167,7 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
                       owners.begin(), partitionLeafs);
     // std::cout << "index moved to:\n" << owners << std::endl;
 
-    std::swap(innerRays, nextRays);
+    innerRays.Swap(nextRays);
 
     // std::cout << ToString() << std::endl;
 }
