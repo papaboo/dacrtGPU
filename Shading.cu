@@ -146,15 +146,40 @@ struct ShadeKernel {
         const bool into = dot(norm, dir) > 0.0f;
         norm = into ? norm * -1.0f : norm;
         
-        const float2 rand = thrust::get<2>(hitID_Ray_rand); // first rand determines  ray type, second ray bounce dir
+        float2 rand = thrust::get<2>(hitID_Ray_rand); // first rand determines  ray type, second ray bounce dir
         float colorContribution = 0.0f;;
+        const float refraction = color_refractions[matID].w;
         if (rand.x < emission_reflection.w) {
             // ray is reflected
             dir = dir - norm * 2 * dot(norm, dir);
-        } else {
+        } else if (rand.x < (emission_reflection.w + refraction)) {
+            // ray is refracted
+            float nc = 1.0f, nt = 1.5f;
+            float nnt = into ? nc / nt : nt / nc;
+            float ddn = dot(dir, norm);
+            float cos2t = 1.0f - nnt * nnt * (1.0f - ddn * ddn);
+            if (cos2t < 0.0f) {
+                // Total internal reflections
+                dir = dir - norm * 2 * dot(norm, dir);
+            } else {
+                float3 tDir = normalize(dir * nnt - norm * (ddn * nnt + sqrt(cos2t)));
+                float a = nt-nc, b = nt+nc, R0 = a*a/(b*b), c = 1.0f-(into ? -ddn : dot(tDir, into? norm :-norm));
+                float Re = R0+(1-R0)*c*c*c*c*c; // float Tr = 1.0f-Re;
+                float P = 0.25f + 0.5f * Re; 
+                // float RP = Re / P, TP = Tr / (1.0f-P);
+                if (rand.y < P) // reflection
+                    dir = dir - norm * 2 * dot(norm, dir);
+                else 
+                    dir = tDir;
+            }
+        }else {
             // ray is diffuse
             colorContribution = 1.0f;
 
+            // Mod rand.x to 0.0 - 1.0f value
+            const float randMod = emission_reflection.w + refraction;
+            rand.x = (rand.x - randMod) / (1.0f - randMod);
+            
             const float r1 = 2 * PI * rand.y;
             const float r2 = rand.x; // need anothor rand value, mod rand.x with reflection and refraction values?
             const float r2s = sqrtf(r2);
