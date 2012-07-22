@@ -54,12 +54,15 @@ struct CompareConeSphere {
 SphereContainer::SphereContainer(HyperCubes& cubes, SpheresGeometry& spheres,
                                  uint* spherePartitionStart)
     : spheres(spheres),
-      indices1(thrust::device_vector<unsigned int>(spheres.Size()*cubes.Size())),
-      indices2(thrust::device_vector<unsigned int>(0)),
-      doneIndices(thrust::device_vector<unsigned int>(0)),
+      indices1(spheres.Size()*cubes.Size()),
+      indices2(spheres.Size()*cubes.Size()),
       currentIndices(indices1), 
-      nextIndices(indices2) {
+      nextIndices(indices2),
+      doneIndices(spheres.Size()*cubes.Size()) {
     
+    nextIndices.resize(0);
+    doneIndices.resize(0);
+
     thrust::device_vector<Cone> cones(cubes.Size());
     thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), createCones);
     //std::cout << cones << std::endl;
@@ -103,6 +106,8 @@ void SphereContainer::Partition(thrust::device_vector<PartitionSide>& partitionS
                                 thrust::device_vector<unsigned int>& leftIndices,
                                 thrust::device_vector<unsigned int>& rightIndices) {
 
+    // std::cout << "--SphereContainer::Partition--:" << std::endl;
+
     const unsigned int nextSize = rightIndices[rightIndices.size()-1];
     nextIndices.resize(nextSize);
 
@@ -114,9 +119,10 @@ void SphereContainer::Partition(thrust::device_vector<PartitionSide>& partitionS
     PartitionLeftRight partitionLeftRight(nextIndices);
     thrust::for_each(input, input + CurrentSize(), partitionLeftRight);
 
+    // TODO change to device_vector.swap, but that crashes right now
     std::swap(currentIndices, nextIndices);
+    // currentIndices.swap(nextIndices);
 }
-
 
 __constant__ unsigned int d_leafIndexOffset;
 
@@ -169,7 +175,7 @@ void SphereContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
                                      thrust::device_vector<unsigned int>& owners) {
 
     /*
-    std::cout << "--PartitionLeafs--:" << std::endl;
+    std::cout << "--SphereContainer::PartitionLeafs--:" << std::endl;
     std::cout << "isLeaf:\n" << isLeaf << std::endl;
     std::cout << "leafNodeIndices:\n" << leafNodeIndices << std::endl;
     std::cout << "spherePartitions:\n" << spherePartitions << std::endl;
@@ -192,7 +198,9 @@ void SphereContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
                       owners.begin(), partitionLeafs);
     // std::cout << "index moved to:\n" << owners << std::endl;
 
+    // TODO change to device_vector.swap, but that crashes right now
     std::swap(currentIndices, nextIndices);
+    //currentIndices.swap(nextIndices);
 
     // std::cout << ToString() << std::endl;
 }
