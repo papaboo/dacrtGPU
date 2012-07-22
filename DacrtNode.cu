@@ -323,7 +323,8 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     thrust::transform(cubes.BeginBounds(), cubes.EndBounds(), axisInfo, calcSplitInfo);    
 
     // Calculate current ray owners. TODO Use a work queue instead
-    thrust::device_vector<unsigned int> rayOwners(rayCount);
+    static thrust::device_vector<unsigned int> rayOwners(rayCount);
+    rayOwners.resize(rayCount);
     //CalcOwners(BeginUnfinishedRayPartitions(), EndUnfinishedRayPartitions(), rayOwners);
     CalcOwners(rayPartitions, rayOwners);
     // std::cout << "rayOwners:\n" << rayOwners << std::endl;
@@ -372,7 +373,8 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // std::cout << "Spheres:\n" << spheres.SphereGeometry().spheres << std::endl;
 
     // Calculate current sphere owners. TODO Use a work queue instead
-    thrust::device_vector<unsigned int> sphereOwners(spheres.CurrentSize());
+    static thrust::device_vector<unsigned int> sphereOwners(spheres.CurrentSize());
+    sphereOwners.resize(spheres.CurrentSize());
     //CalcOwners(BeginUnfinishedSpherePartitions(), EndUnfinishedSpherePartitions(), sphereOwners);
     CalcOwners(spherePartitions, sphereOwners);
     // std::cout << "sphereOwners:\n" << sphereOwners << std::endl;
@@ -538,6 +540,9 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     
     // New node ray partitions
     nextRayPartitions.resize(rayPartitions.size() - newLeafNodes);
+    // std::cout << "doneRayPartitions.capacity: " << doneRayPartitions.capacity() << std::endl;
+    // std::cout << "doneRayPartitions.size: " << doneRayPartitions.size() << std::endl;
+    // std::cout << "doneRayPartitions.newsize: " << (doneRayPartitions.size() + newLeafNodes) << std::endl;
     doneRayPartitions.resize(doneRayPartitions.size() + newLeafNodes);
     thrust::zip_iterator<thrust::tuple<Uint2Iterator, UintIterator, BoolIterator> > nodePartitionsInput =
         thrust::make_zip_iterator(thrust::make_tuple(BeginUnfinishedRayPartitions(), leafIndices.begin(), isLeaf.begin()));
