@@ -45,39 +45,27 @@ class DacrtNodes {
 public:
     // TODO partition end always equal the next partitions start, so we can
     // reduce the uint2 to an uint, reducing memory overhead.
-    thrust::device_vector<uint2> rayPartitions1; // [start, end]
-    thrust::device_vector<uint2> spherePartitions1; // [start, end]
-    thrust::device_vector<uint2> rayPartitions2; // [start, end]
-    thrust::device_vector<uint2> spherePartitions2; // [start, end]
     
-    thrust::device_vector<uint2>& rayPartitions;
-    thrust::device_vector<uint2>& spherePartitions;
-    thrust::device_vector<uint2>& nextRayPartitions;
-    thrust::device_vector<uint2>& nextSpherePartitions;
-    size_t unfinishedNodes; // currently used unfinished entries, not actual vector size
+    thrust::device_vector<uint2> rayPartitions;
+    thrust::device_vector<uint2> spherePartitions;
+    thrust::device_vector<uint2> nextRayPartitions;
+    thrust::device_vector<uint2> nextSpherePartitions;
     
     thrust::device_vector<uint2> doneRayPartitions;
     thrust::device_vector<uint2> doneSpherePartitions;
-    size_t doneNodes;
 
 public:
 
     DacrtNodes(const size_t capacity) 
-        : rayPartitions1(capacity), spherePartitions1(capacity),
-          rayPartitions2(capacity), spherePartitions2(capacity),
-          rayPartitions(rayPartitions1), spherePartitions(spherePartitions1),
-          nextRayPartitions(rayPartitions2), nextSpherePartitions(spherePartitions2),
-          unfinishedNodes(0), 
-          doneRayPartitions(capacity), doneSpherePartitions(capacity), doneNodes(0) {
+        : rayPartitions(capacity), spherePartitions(capacity),
+          nextRayPartitions(capacity), nextSpherePartitions(capacity),
+          doneRayPartitions(capacity), doneSpherePartitions(capacity) {
         rayPartitions.resize(0); spherePartitions.resize(0);
         nextRayPartitions.resize(0); nextSpherePartitions.resize(0);
         doneRayPartitions.resize(0); doneSpherePartitions.resize(0);
     }
 
     void Reset();
-
-    // TODO Collect everything in a DacrtNode constructor
-    // DacrtNodes(RayContainer& rays, SphereGeometry& spheres, SplitScheme split);
 
     void Partition(RayContainer& rays, SphereContainer& spheres,
                    HyperCubes& initialCubes);
@@ -100,25 +88,21 @@ public:
                              thrust::device_vector<unsigned int>& hits);
 
     inline thrust::device_vector<uint2>::iterator BeginUnfinishedRayPartitions() { return rayPartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndUnfinishedRayPartitions() { return rayPartitions.begin() + unfinishedNodes; }
+    inline thrust::device_vector<uint2>::iterator EndUnfinishedRayPartitions() { return rayPartitions.end(); }
     inline thrust::device_vector<uint2>::iterator BeginUnfinishedSpherePartitions() { return spherePartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndUnfinishedSpherePartitions() { return spherePartitions.begin() + unfinishedNodes; }
-    inline size_t UnfinishedNodes() const { return unfinishedNodes; }
+    inline thrust::device_vector<uint2>::iterator EndUnfinishedSpherePartitions() { return spherePartitions.end(); }
+    inline size_t UnfinishedNodes() const { return rayPartitions.size(); }
     void ResizeUnfinished(const size_t size);
 
     inline thrust::device_vector<uint2>::iterator BeginDoneRayPartitions() { return doneRayPartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndDoneRayPartitions() { return doneRayPartitions.begin() + doneNodes; }
-    inline size_t DoneNodes() const { return doneNodes; }
+    inline thrust::device_vector<uint2>::iterator EndDoneRayPartitions() { return doneRayPartitions.end(); }
+    inline size_t DoneNodes() const { return doneRayPartitions.size(); }
 
     inline DacrtNode GetUnfinished(const size_t i) const {
         return DacrtNode(rayPartitions[i], spherePartitions[i]);
     }
     inline void SetUnfinished(const size_t i, const DacrtNode& n) {
-        if (unfinishedNodes <= i) {
-            unfinishedNodes = i+1;
-            rayPartitions.resize(unfinishedNodes);
-            spherePartitions.resize(unfinishedNodes);
-        }
+        if (UnfinishedNodes() <= i) ResizeUnfinished(i+1);
         rayPartitions[i] = make_uint2(n.rayStart, n.rayEnd);
         spherePartitions[i] = make_uint2(n.sphereStart, n.sphereEnd);
     }
