@@ -68,7 +68,11 @@ public:
           rayPartitions(rayPartitions1), spherePartitions(spherePartitions1),
           nextRayPartitions(rayPartitions2), nextSpherePartitions(spherePartitions2),
           unfinishedNodes(0), 
-          doneRayPartitions(capacity), doneSpherePartitions(capacity), doneNodes(0) {}
+          doneRayPartitions(capacity), doneSpherePartitions(capacity), doneNodes(0) {
+        rayPartitions.resize(0); spherePartitions.resize(0);
+        nextRayPartitions.resize(0); nextSpherePartitions.resize(0);
+        doneRayPartitions.resize(0); doneSpherePartitions.resize(0);
+    }
 
     void Reset();
 
