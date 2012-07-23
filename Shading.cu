@@ -216,9 +216,11 @@ void Shading::Shade(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd,
     size_t rayCount = raysEnd - raysBegin;
 
     // Generate random numbers
-    thrust::host_vector<float2> host_random(rayCount);
+    static thrust::host_vector<float2> host_random(rayCount);
+    static thrust::device_vector<float2> random(rayCount);
+    host_random.resize(rayCount);
     thrust::generate(host_random.begin(), host_random.end(), RandomFloat2);
-    thrust::device_vector<float2> random = host_random;
+    random = host_random;
     
     thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator, Float2Iterator> > hitRayBegin =
         thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin, random.begin()));
