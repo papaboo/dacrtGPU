@@ -75,24 +75,11 @@ struct ReduceHyperCubes {
     }
 };
 
-size_t HyperCubes::DestructiveResize(const size_t s) {
-    if (s > capacity) {
-        a = thrust::device_vector<SignedAxis>(s);
-        x = thrust::device_vector<float2>(s);
-        y = thrust::device_vector<float2>(s);
-        z = thrust::device_vector<float2>(s);
-        u = thrust::device_vector<float2>(s);
-        v = thrust::device_vector<float2>(s);
-        capacity = s;
-    }
-    return size = s;
-}
-
 void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator rayEnd, 
                              thrust::device_vector<uint2> rayPartitions,
                              const size_t cubes) {
 
-    DestructiveResize(cubes);    
+    Resize(cubes);
 
     unsigned int rayRange = rayEnd - rayBegin;
     thrust::device_vector<SignedAxis> A(rayRange);
@@ -130,15 +117,14 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
         thrust::make_zip_iterator(thrust::make_tuple(hostA.begin(), hostX.begin(), hostY.begin(), 
                                                      hostZ.begin(), hostU.begin(), hostV.begin()));
     
-    static thrust::host_vector<int> cubeOwners(128);
-    cubeOwners.resize(capacity);
+    static thrust::host_vector<int> cubeOwners(128); cubeOwners.resize(Size());
 
-    thrust::host_vector<SignedAxis> hostResA(capacity);
-    thrust::host_vector<float2> hostResX(capacity);
-    thrust::host_vector<float2> hostResY(capacity);
-    thrust::host_vector<float2> hostResZ(capacity);
-    thrust::host_vector<float2> hostResU(capacity);
-    thrust::host_vector<float2> hostResV(capacity);
+    thrust::host_vector<SignedAxis> hostResA(Size());
+    thrust::host_vector<float2> hostResX(Size());
+    thrust::host_vector<float2> hostResY(Size());
+    thrust::host_vector<float2> hostResZ(Size());
+    thrust::host_vector<float2> hostResU(Size());
+    thrust::host_vector<float2> hostResV(Size());
     
     thrust::zip_iterator<thrust::tuple<thrust::host_vector<SignedAxis>::iterator,
         thrust::host_vector<float2>::iterator,
@@ -163,6 +149,16 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
     z = hostResZ;
     u = hostResU;
     v = hostResV;
+}
+
+size_t HyperCubes::Resize(const size_t s) {
+    a.resize(s);
+    x.resize(s);
+    y.resize(s);
+    z.resize(s);
+    u.resize(s);
+    v.resize(s);
+    return Size();
 }
 
 std::string HyperCubes::ToString() const {

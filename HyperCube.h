@@ -61,7 +61,6 @@ public:
     thrust::device_vector<float2> z;
     thrust::device_vector<float2> u;
     thrust::device_vector<float2> v;
-    size_t size, capacity;
     
 public:
 
@@ -85,8 +84,7 @@ public:
           y(thrust::device_vector<float2>(size)),
           z(thrust::device_vector<float2>(size)),
           u(thrust::device_vector<float2>(size)),
-          v(thrust::device_vector<float2>(size)),
-          size(0), capacity(size) {}
+          v(thrust::device_vector<float2>(size)) {}
     
     void ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator rayEnd, 
                      thrust::device_vector<uint2> rayPartitions,
@@ -95,16 +93,19 @@ public:
     inline Iterator Begin() {
         return thrust::make_zip_iterator(thrust::make_tuple(a.begin(), x.begin(), y.begin(), z.begin(), u.begin(), v.begin()));
     }
-    inline Iterator End() { return Begin() + size; }
+    inline Iterator End() { 
+        return thrust::make_zip_iterator(thrust::make_tuple(a.end(), x.end(), y.end(), z.end(), u.end(), v.end()));
+    }
 
     inline BoundIterator BeginBounds() {
         return thrust::make_zip_iterator(thrust::make_tuple(x.begin(), y.begin(), z.begin(), u.begin(), v.begin()));
     }
-    inline BoundIterator EndBounds() { return BeginBounds() + size; }
+    inline BoundIterator EndBounds() { 
+        return thrust::make_zip_iterator(thrust::make_tuple(x.end(), y.end(), z.end(), u.end(), v.end()));
+    }
 
-    inline size_t Size() const { return size; }
-    inline size_t Capacity() const { return capacity; }
-    size_t DestructiveResize(const size_t s);
+    inline size_t Size() const { return a.size(); }
+    size_t Resize(const size_t s);
 
     inline HyperCube Get(const size_t i) const {
         return HyperCube(a[i], x[i], y[i], z[i], u[i], v[i]);
