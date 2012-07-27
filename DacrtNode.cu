@@ -139,8 +139,8 @@ struct CubesFromSplitPlanes {
     Axis* splitAxis;
     float* splitValues;
     
-    CubesFromSplitPlanes(HyperCubes& cubes, thrust::device_vector<Axis> sAxis,
-                         thrust::device_vector<float> sValues) 
+    CubesFromSplitPlanes(HyperCubes& cubes, thrust::device_vector<Axis>& sAxis,
+                         thrust::device_vector<float>& sValues) 
         : a(thrust::raw_pointer_cast(cubes.a.data())), 
           x(thrust::raw_pointer_cast(cubes.x.data())), 
           y(thrust::raw_pointer_cast(cubes.y.data())), 
@@ -323,7 +323,6 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // Calculate current ray owners. TODO Use a work queue instead
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
-    //CalcOwners(BeginUnfinishedRayPartitions(), EndUnfinishedRayPartitions(), rayOwners);
     CalcOwners(rayPartitions, rayOwners);
     // std::cout << "rayOwners:\n" << rayOwners << std::endl;
     thrust::zip_iterator<thrust::tuple<HyperRays::Iterator, UintIterator> > raysWithOwners
@@ -341,7 +340,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // Calculate the indices for the rays moved left using scan
     static thrust::device_vector<unsigned int> rayLeftIndices(rayCount+1);
     rayLeftIndices.resize(rayCount+1);
-    rayLeftIndices[0] = 0;
+    rayLeftIndices[0] = 0; // Should be handled by resize not being destructive.
     thrust::transform_inclusive_scan(rayPartitionSides.begin(), rayPartitionSides.end(),
                                      rayLeftIndices.begin()+1, leftToOne, plus);
     // std::cout << "rayLeftIndices:\n" << rayLeftIndices << std::endl;
@@ -352,7 +351,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // std::cout << "Rays after partitioning :\n" << rays.ToString() << std::endl;
 
     // Calculate the new hypercubes 
-    /// TODO? Since the rays have been scattered, just reduce them, but that
+    /// IDEA: Since the rays have been scattered, just reduce them, but that
     // would mean also scattering the hypercubes when creating leaves.
     static HyperCubes splitCubes(cubes.Size() * 2);
     splitCubes.Resize(cubes.Size() * 2);
@@ -389,11 +388,11 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     sphereLeftIndices.resize(spheres.CurrentSize()+1);
     static thrust::device_vector<unsigned int> sphereRightIndices(spheres.CurrentSize()+1);
     sphereRightIndices.resize(spheres.CurrentSize()+1);
-    sphereLeftIndices[0] = 0;
+    sphereLeftIndices[0] = 0; // Should be handled by resize not being destructive.
     
     thrust::transform_inclusive_scan(spherePartitionSides.begin(), spherePartitionSides.end(),
                                      sphereLeftIndices.begin()+1, leftToOne, plus);
-    sphereRightIndices[0] = 0;
+    sphereRightIndices[0] = 0; // Should be handled by resize not being destructive.
     thrust::transform_inclusive_scan(spherePartitionSides.begin(), spherePartitionSides.end(),
                                      sphereRightIndices.begin()+1, rightToOne, plus);
 
