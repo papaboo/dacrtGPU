@@ -7,14 +7,10 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <Utils.h>
-
 #include <iostream>
-#include <stdexcept>
 
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
-#include <thrust/partition.h>
 #include <thrust/version.h>
 
 using std::cout;
