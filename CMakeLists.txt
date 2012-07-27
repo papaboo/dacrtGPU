@@ -3,6 +3,12 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 SET(PROJ_NAME "DACRT_GPU")
 PROJECT(${PROJ_NAME})
 
+# IF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
+#   ADD_DEFINITIONS(-m32 -Wall -Wextra -Wno-unused-parameter)
+#   SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -m32")
+#   SET(CUDA_64_BIT_DEVICE_CODE OFF)
+# ENDIF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
+
 INCLUDE_DIRECTORIES(.)
 
 # Find CUDA
@@ -25,6 +31,8 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   HyperRays.cu
   Material.h
   Material.cu
+  Meta/CUDA.h
+  Meta/CUDA.cu
   RayContainer.h
   RayContainer.cu
   Shading.h
@@ -40,3 +48,24 @@ TARGET_LINK_LIBRARIES(${PROJ_NAME}
   ${CUDA_LIBRARIES} #cuda rt
 )
 
+
+#segmented reduce test
+CUDA_ADD_EXECUTABLE(TestSegReduce
+  test.cu
+)
+
+TARGET_LINK_LIBRARIES(TestSegReduce
+  ${CUDA_LIBRARIES} #cuda rt
+)
+
+
+# WorkQueueTest
+CUDA_ADD_EXECUTABLE(TestWorkQueue
+  Meta/CUDA.h
+  Meta/CUDA.cu
+  WorkQueueTest.cu
+)
+
+TARGET_LINK_LIBRARIES(TestWorkQueue
+  ${CUDA_LIBRARIES} #cuda rt
+)

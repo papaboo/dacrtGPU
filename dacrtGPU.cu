@@ -14,6 +14,7 @@
 #include <Fragment.h>
 #include <RayContainer.h>
 #include <HyperCube.h>
+#include <Meta/CUDA.h>
 #include <Shading.h>
 #include <SphereContainer.h>
 #include <SphereGeometry.h>
@@ -34,8 +35,8 @@ using std::endl;
 //const int WIDTH = 8, HEIGHT = 8;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-const int WIDTH = 128, HEIGHT = 128;
-//const int WIDTH = 256, HEIGHT = 256;
+//const int WIDTH = 128, HEIGHT = 128;
+const int WIDTH = 256, HEIGHT = 256;
 //const int WIDTH = 512, HEIGHT = 512;
 int sqrtSamples;
 int samples;
@@ -47,9 +48,17 @@ int samples;
 // work queue instead for calculating splitting sides.
 
 // Don't do full leaf moved left/right arrays. Just do it for the nodes and then
-// calculate the ray/sphere left/right leaf position after that using their index
+// calculate the ray/sphere left/right leaf position after that using their
+// index. This means we can do our inclusive_scan's over the nodes instead or
+// rays and spheres. Can the same be done for non leaf partitions?
 
 // TODO
+
+// Work queue idea: Update the pointer to the next work 'pool' and do it as an
+// atomic operation. Then update the current ray owner afterwards. This can
+// either be done atomic or not. In any case if it isn't done at the exact same
+// time as the work index, the threads can simply iterate upwards until they find
+// the correct dacrtnode which owns the ray (this will need to be done anyway)
 
 // Can we do ray partitioning without converting them to hyper rays? 
 // - Sort them by major axis.
@@ -61,13 +70,7 @@ int samples;
 //   as infinite to discourage its use. (Or use specialized kernels for each
 //   major axis, not that hard)
 // - Proceed as usual with plane creation and intersection (but now without the
-//   constant conversion)
-
-// Work queue idea: Update the pointer to the next work 'pool' and do it as an
-// atomic operation. Then update the current ray owner afterwards. This can
-// either be done atomic or not. In any case if it isn't done at the exact same
-// time as the work index, the threads can simply iterate upwards until they find
-// the correct dacrtnode which owns the ray (this will need to be done anyway)
+//   constant conversion trough a switch)
 
 // The left/right indice arrays also encode the left/right side info. Can we use
 // this instead of the PartitionSide arrays to save memory? Will it be just as fast?
@@ -85,6 +88,8 @@ int samples;
 
 // When only a few rays remain, don't paralize intersection over all rays, but
 // do it over geometry instead.
+
+// Move randomly generated numbers to the GPU
 
 // Amortise geometry sorting cost by using a morton curve subdivision (everyone
 // else is anyway)
@@ -237,6 +242,8 @@ void CombineFragsAndColor(Fragments& frags,
 }
 
 int main(int argc, char *argv[]){
+
+    Meta::CUDA::Initialize();
 
     std::cout.setf(std::ios::unitbuf); // unbuffered std out
     cout << "Thrust v" << THRUST_MAJOR_VERSION << "." << THRUST_MINOR_VERSION << endl;
