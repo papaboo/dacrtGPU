@@ -78,10 +78,10 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
                        const size_t elements, // replace with thrust counting iterator?
                        Operation& operation) {
 
-    std::cout << "ForEachWithOwners " << std::endl;
-    std::cout << "From " << partitionBegin << " to " << partitionEnd << std::endl;
-    std::cout << "Partitions:\n" << partitions << std::endl;
-    std::cout << "elements: " << elements << std::endl;
+    // std::cout << "ForEachWithOwners " << std::endl;
+    // std::cout << "From " << partitionBegin << " to " << partitionEnd << std::endl;
+    // std::cout << "Partitions:\n" << partitions << std::endl;
+    // std::cout << "elements: " << elements << std::endl;
 
     // Maybe add a __constant__ that is zero to the GPU and copy from that?
     // Saves a bit of bus. Or do it as a zero-out kernel.
@@ -99,8 +99,7 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
         cudaFuncGetAttributes(&funcAttr, ForeachWithOwnerKernel<true, true, Operation>);
     else
         cudaFuncGetAttributes(&funcAttr, ForeachWithOwnerKernel<false, true, Operation>);
-    //const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-    const unsigned int blockDim = 32;
+    const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     
     const bool BLOCK_DIM_LARGER_THAN_WARPSIZE = blockDim > Meta::CUDA::activeCudaDevice.warpSize;
     std::cout << "ForEachWithOwner<" << USE_GLOBAL_OWNER << ", " << BLOCK_DIM_LARGER_THAN_WARPSIZE << "><<<" << blocks << ", " << blockDim << ">>>" << std::endl;
