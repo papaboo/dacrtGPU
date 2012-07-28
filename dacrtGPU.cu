@@ -23,10 +23,8 @@
 #include <iostream>
 
 #include <thrust/device_vector.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/partition.h>
-#include <thrust/tuple.h>
+#include <thrust/transform.h>
 #include <thrust/version.h>
 
 using std::cout;
@@ -96,19 +94,6 @@ int samples;
 
 // Amortise ray sorting cost by storing them in pixelwide packets (packets are
 // always crap at the N'th trace, can we dynamically sort them semi optimal?)
-
-inline std::string PrintHits(thrust::device_vector<unsigned int>& hits, const int width, const int height) {
-    std::ostringstream out;
-    for (int y = 0; y < height; ++y) {
-        for (int x = 0; x < width; ++x) {
-            unsigned int index = x + y * width;
-            out << hits[index];
-            if (x+1 < width) out << " ,";
-        }
-        out << "\n";
-    }
-    return out.str();
-}
 
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
@@ -190,9 +175,9 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
         }
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
-        nodes.ExhaustiveIntersect(rays, sphereIndices, hitIDs);
+        nodes.FastExhaustiveIntersect(rays, sphereIndices, hitIDs);
 
-        // cout << PrintHits(hitIDs, WIDTH, HEIGHT) << endl;
+        //cout << "hitIDs: " << hitIDs << endl;
 
         Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
                        sphereIndices.spheres, rayFrags);

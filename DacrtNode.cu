@@ -9,6 +9,7 @@
 #include <DacrtNode.h>
 
 #include <Cone.h>
+#include <ForEachWithOwners.h>
 #include <HyperCube.h>
 #include <HyperRays.h>
 #include <RayContainer.h>
@@ -651,6 +652,77 @@ void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& sphere
 }
 
 
+struct FastExhaustiveIntersection {
+    float4 *rayOrigins, *rayAxisUVs;
+    uint2 *spherePartitions;
+    unsigned int *sphereIndices;
+    Sphere *spheres;
+
+    unsigned int *hitIDs;
+    
+    FastExhaustiveIntersection(HyperRays& rays, 
+                               thrust::device_vector<uint2>& sPartitions,
+                               thrust::device_vector<unsigned int>& sIndices, 
+                               thrust::device_vector<Sphere>& ss,
+                               thrust::device_vector<unsigned int>& hits)
+        : rayOrigins(thrust::raw_pointer_cast(rays.origins.data())),
+          rayAxisUVs(thrust::raw_pointer_cast(rays.axisUVs.data())),
+          spherePartitions(thrust::raw_pointer_cast(sPartitions.data())), 
+          sphereIndices(thrust::raw_pointer_cast(sIndices.data())), 
+          spheres(thrust::raw_pointer_cast(ss.data())),
+          hitIDs(thrust::raw_pointer_cast(hits.data()))
+    {}
+
+    /**
+     * Takes a ray as argument and intersects it against all spheres referenced
+     * by its parent DacrtNode.
+     *
+     * Returns the index of the intersected sphere and stores the distance to it
+     * in the w component of the ray's direction.
+     */
+    __host__ __device__
+    void operator()(const unsigned int index, const unsigned int owner) const {
+        const float3 origin = make_float3(rayOrigins[index]);
+        const float3 dir = normalize(HyperRay::AxisUVToDirection(make_float3(rayAxisUVs[index])));
+        
+        const uint2 spherePartition = spherePartitions[owner];
+        float hitT = 1e30f;
+        unsigned int hitID = SpheresGeometry::MISSED;
+        
+        for (unsigned int g = spherePartition.x; g < spherePartition.y; ++g) {
+            const unsigned int sphereId = sphereIndices[g];
+            const Sphere s = spheres[sphereId];
+            const float t = s.Intersect(origin, dir);
+            if (0 < t && t < hitT) {
+                hitID = sphereId;
+                hitT = t;
+            }
+        }
+
+        rayAxisUVs[index] = make_float4(dir, hitT);
+        hitIDs[index] = hitID;
+    }
+};
+
+void DacrtNodes::FastExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
+                                         thrust::device_vector<unsigned int>& hits) {
+    
+    // std::cout << "FastExhaustiveIntersect" << std::endl;
+    hits.resize(rays.LeafRays());
+
+    // std::cout << "doneRayPartitions:\n" << doneRayPartitions <<std::endl;
+
+    FastExhaustiveIntersection exhaustive(rays.leafRays, 
+                                          doneSpherePartitions, 
+                                          spheres.doneIndices, 
+                                          spheres.spheres.spheres,
+                                          hits);
+    ForEachWithOwners(doneRayPartitions, 0, doneRayPartitions.size(),
+                      hits.size(), exhaustive);
+
+    //std::cout << "hits:\n" << hits << std::endl;
+}
+
 // *** CALC OWNERS ***
 
 struct SetMarkers {
@@ -667,6 +739,19 @@ struct SetMarkers {
         owners[part.x] = threadId == 0 ? 0 : 1;
     }
 };
+
+struct WriteOwner {
+    unsigned int* owners;
+    
+    WriteOwner(thrust::device_vector<unsigned int>& os) 
+        : owners(thrust::raw_pointer_cast(os.data())) {}
+
+    __device__
+    void operator()(const unsigned int index, const unsigned int owner) const {
+        owners[index] = owner;
+    }
+};
+
 
 void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
                             thrust::device_vector<unsigned int>& owners) {

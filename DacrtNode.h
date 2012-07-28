@@ -86,6 +86,8 @@ public:
      */
     void ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
                              thrust::device_vector<unsigned int>& hits);
+    void FastExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
+                                 thrust::device_vector<unsigned int>& hits);
 
     inline thrust::device_vector<uint2>::iterator BeginUnfinishedRayPartitions() { return rayPartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator EndUnfinishedRayPartitions() { return rayPartitions.end(); }
