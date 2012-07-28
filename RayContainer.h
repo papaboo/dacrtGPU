@@ -12,9 +12,11 @@
 #include <HyperRays.h>
 
 class RayContainer {
+public:
     HyperRays innerRays;
+private:
     HyperRays nextRays;
-
+public:
     HyperRays leafRays;
 
 public:
