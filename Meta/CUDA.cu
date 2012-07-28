@@ -7,8 +7,7 @@
 // -----------------------------------------------------------------------------
 
 #include <Meta/CUDA.h>
-
-#include <iostream>
+#include <Utils.h>
 
 // One of these contain cutGetMaxGflopsDeviceId. No idea which (no internet)
 #include <cutil.h>
@@ -30,12 +29,15 @@ void CUDA::Initialize() {
     CUdevice device = cutGetMaxGflopsDeviceId();
     cudaSetDevice(device);
     // cudaGLSetGLDevice(device);
-
+    CHECK_FOR_CUDA_ERROR();
+    
     cuInit(0);
-
+    CHECK_FOR_CUDA_ERROR();
+    
     int version;
     cuDriverGetVersion(&version);
     cudaGetDeviceProperties(&activeCudaDevice, device);
+    CHECK_FOR_CUDA_ERROR();
     std::cout << "CUDA: version " << version/1000 << "." << version % 100 << ", using device " << std::string(activeCudaDevice.name) << std::endl;
    
 }
