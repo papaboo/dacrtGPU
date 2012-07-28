@@ -33,6 +33,12 @@ int main(int argc, char *argv[]){
 
     Meta::CUDA::Initialize();
 
+    thrust::device_vector<uint2> partitions(2);
+    partitions[0] = make_uint2(0, 31);
+    partitions[1] = make_uint2(31, 64);
+    thrust::device_vector<unsigned int> owners(64);
+ 
+   /*
     thrust::device_vector<uint2> partitions(12);
     partitions[0] = make_uint2(0, 100);
     partitions[1] = make_uint2(100, 250);
@@ -46,14 +52,14 @@ int main(int argc, char *argv[]){
     partitions[9] = make_uint2(703, 703);
     partitions[10] = make_uint2(703, 65000); // extra element containing the elem count and a dummy max value.
     partitions[11] = make_uint2(65000, 6500000); // if this showes up something is seriously wrong with the kernel.
-    
     thrust::device_vector<unsigned int> owners(704);
+    */    
 
     WriteOwner writeOwner(owners);
     ForEachWithOwners(partitions, 0, partitions.size(),
                       owners.size(), writeOwner);
 
-    // std::cout << owners << std::endl;
+    std::cout << owners << std::endl;
     
     return 0;
 }

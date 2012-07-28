@@ -23,7 +23,7 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
     __shared__ volatile unsigned int localPoolNextOwner;
     unsigned int localIndex, localOwner;
     
-    if (!USE_GLOBAL_OWNER) localPoolNextOwner = 0;
+    if (!USE_GLOBAL_OWNER) localOwner = 0;
     if (BLOCK_DIM_LARGER_THAN_WARPSIZE) __syncthreads();
     
     while (true) {
@@ -32,44 +32,56 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
             localPoolNextIndex = atomicAdd(&d_globalPoolNextIndex, blockDim.x);
 
             if (USE_GLOBAL_OWNER) {
-                // TODO Paralize the fetch and loop over it in thread 0. Or
-                // perhaps loop over it in parallel and only let the 'winner'
-                // write it's id in a res var. \o/ (clever boy)
+                // TODO Paralize the fetch loop over shared data in parallel,
+                // then let the 'winner' write it's id in a res var. \o/
+                // (clover boy)
                 localPoolNextOwner = d_globalPoolNextOwner;
-                uint2 partition;
-                do {
+                // uint partition;
+                // do {
+                //     partition = partitions[++localPoolNextOwner];
+                //     // NOTE: I'm specifically avoiding using y (end) because I
+                //     // will switch to unsigned int in a later version
+                // } while (partition <= localPoolNextIndex);
+                // d_globalPoolNextOwner = --localPoolNextOwner;
+                
+                uint2 partition = partitions[localPoolNextOwner];
+                while (localPoolNextIndex >= partition.y)
                     partition = partitions[++localPoolNextOwner];
-                    // NOTE: I'm specifically avoiding using y (end) because I
-                    // will switch to unsigned int in a later version
-                } while (partition.x <= localPoolNextIndex);
-                d_globalPoolNextOwner = --localPoolNextOwner;        
+                d_globalPoolNextOwner = localPoolNextOwner;
             }
         }
         
         if (BLOCK_DIM_LARGER_THAN_WARPSIZE) __syncthreads();
         
         localIndex = localPoolNextIndex + threadIdx.x;
-        localOwner = localPoolNextOwner;
+        if (localIndex >= elements) return; // terminate if we exceed the amount of indices
 
-        if (localIndex >= elements) // terminate if we exceed the amount of indices
-            return;
+        if (USE_GLOBAL_OWNER) localOwner = localPoolNextOwner;
         
-        uint2 partition;
-        do {
+        // uint partition;
+        // do {
+        //     partition = partitions[++localOwner];
+        // } while (partition <= localIndex);
+        // --localOwner;
+
+        uint2 partition = partitions[localOwner];
+        while (localIndex >= partition.y)
             partition = partitions[++localOwner];
-        } while (partition.x <= localIndex);
-        --localOwner;
         
         // Perform logic
         operation(localIndex, localOwner);
     }
 }
 
-
 template<class Operation>
-void ForEachWithOwners(thrust::device_vector<uint2> partitions, size_t partitionBegin, size_t partitionEnd,
-                       size_t elements, // replace with thrust counting iterator?
+void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t partitionBegin, const size_t partitionEnd,
+                       const size_t elements, // replace with thrust counting iterator?
                        Operation& operation) {
+
+    std::cout << "ForEachWithOwners " << std::endl;
+    std::cout << "From " << partitionBegin << " to " << partitionEnd << std::endl;
+    std::cout << "Partitions:\n" << partitions << std::endl;
+    std::cout << "elements: " << elements << std::endl;
 
     // Maybe add a __constant__ that is zero to the GPU and copy from that?
     // Saves a bit of bus. Or do it as a zero-out kernel.
@@ -87,10 +99,12 @@ void ForEachWithOwners(thrust::device_vector<uint2> partitions, size_t partition
         cudaFuncGetAttributes(&funcAttr, ForeachWithOwnerKernel<true, true, Operation>);
     else
         cudaFuncGetAttributes(&funcAttr, ForeachWithOwnerKernel<false, true, Operation>);
-    const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    //const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    const unsigned int blockDim = 32;
     
     const bool BLOCK_DIM_LARGER_THAN_WARPSIZE = blockDim > Meta::CUDA::activeCudaDevice.warpSize;
-    std::cout << "ForEachWithOwner<<<" << blocks << ", " << blockDim << ">>>" << std::endl;
+    std::cout << "ForEachWithOwner<" << USE_GLOBAL_OWNER << ", " << BLOCK_DIM_LARGER_THAN_WARPSIZE << "><<<" << blocks << ", " << blockDim << ">>>" << std::endl;
+    
     if (USE_GLOBAL_OWNER) {
         if (BLOCK_DIM_LARGER_THAN_WARPSIZE) {
             ForeachWithOwnerKernel<true, true><<<blocks, blockDim>>>
@@ -112,7 +126,6 @@ void ForEachWithOwners(thrust::device_vector<uint2> partitions, size_t partition
                  elements, operation);
         }
     }
-    
-};
+}
 
 #endif
