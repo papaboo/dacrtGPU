@@ -35,6 +35,17 @@ std::string DacrtNode::ToString() const {
 
 // *** DacrtNodes ***
 
+DacrtNodes::DacrtNodes(const size_t capacity) 
+    : scan1(capacity+1), scan2(capacity+1), 
+      rayPartitions(capacity), spherePartitions(capacity),
+      nextRayPartitions(capacity), nextSpherePartitions(capacity),
+      doneRayPartitions(capacity), doneSpherePartitions(capacity) {
+    scan1[0] = scan2[0] = 0;
+    rayPartitions.resize(0); spherePartitions.resize(0);
+    nextRayPartitions.resize(0); nextSpherePartitions.resize(0);
+    doneRayPartitions.resize(0); doneSpherePartitions.resize(0);
+}
+
 void DacrtNodes::Reset() {
     rayPartitions.resize(0);
     nextRayPartitions.resize(0);
@@ -306,7 +317,8 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
                            HyperCubes& cubes) {
 
     // TODO move static left and right indices vectors to global scope? Do I
-    // need more than one at a time?
+    // need more than one at a time? 
+    /// No! But I need to split next ray and sphere partition creation.
 
     size_t rayCount = rays.InnerSize();
 
@@ -325,7 +337,6 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
     CalcOwners(rayPartitions, rayOwners);
-    // std::cout << "rayOwners:\n" << rayOwners << std::endl;
     thrust::zip_iterator<thrust::tuple<HyperRays::Iterator, UintIterator> > raysWithOwners
         = thrust::make_zip_iterator(thrust::make_tuple(rays.BeginInnerRays(), rayOwners.begin()));
 
@@ -336,7 +347,6 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     RayPartitionSide rayPartitionSide = RayPartitionSide(splitAxis, splitValues);
     thrust::transform(raysWithOwners, raysWithOwners + rayCount, 
                       rayPartitionSides.begin(), rayPartitionSide);
-    // std::cout << "rayPartitionSides:\n" << rayPartitionSides << std::endl;
 
     // Calculate the indices for the rays moved left using scan
     static thrust::device_vector<unsigned int> rayLeftIndices(rayCount+1);
@@ -344,12 +354,9 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     rayLeftIndices[0] = 0; // Should be handled by resize not being destructive.
     thrust::transform_inclusive_scan(rayPartitionSides.begin(), rayPartitionSides.end(),
                                      rayLeftIndices.begin()+1, leftToOne, plus);
-    // std::cout << "rayLeftIndices:\n" << rayLeftIndices << std::endl;
     
     // Scatter the rays
-    // std::cout << "Rays before partitioning :\n" << rays.ToString() << std::endl;
     rays.Partition(rayPartitionSides, rayLeftIndices);
-    // std::cout << "Rays after partitioning :\n" << rays.ToString() << std::endl;
 
     // Calculate the new hypercubes 
     /// IDEA: Since the rays have been scattered, just reduce them, but that
@@ -359,7 +366,6 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     CubesFromSplitPlanes cubesFromSplitPlanes(cubes, splitAxis, splitValues);
     thrust::transform(thrust::counting_iterator<unsigned int>(0), thrust::counting_iterator<unsigned int>(cubes.Size() * 2), 
                       splitCubes.Begin(), cubesFromSplitPlanes);
-    // std::cout << "new" << splitCubes << std::endl;
     
     // Calculate the cones used for splitting 
     // TODO using knowledge about the cube split, the resulting two cones can be
@@ -367,15 +373,11 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     static thrust::device_vector<Cone> cones(cubes.Size());
     cones.resize(cubes.Size() * 2);
     thrust::transform(splitCubes.Begin(), splitCubes.End(), cones.begin(), createCones);
-    // std::cout << "Cones:\n" << cones << std::endl;
-    // std::cout << "Spheres:\n" << spheres.SphereGeometry().spheres << std::endl;
 
     // Calculate current sphere owners. TODO Use a work queue instead
     static thrust::device_vector<unsigned int> sphereOwners(spheres.CurrentSize());
     sphereOwners.resize(spheres.CurrentSize());
-    //CalcOwners(BeginUnfinishedSpherePartitions(), EndUnfinishedSpherePartitions(), sphereOwners);
     CalcOwners(spherePartitions, sphereOwners);
-    // std::cout << "sphereOwners:\n" << sphereOwners << std::endl;
 
     // Calculate sphere partitions
     static thrust::device_vector<PartitionSide> spherePartitionSides(spheres.CurrentSize());
@@ -383,25 +385,21 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     SpherePartitioningByCones spherePartitioningByCones(cones, spheres.SphereGeometry().spheres);
     thrust::transform(spheres.BeginCurrentIndices(), spheres.EndCurrentIndices(), sphereOwners.begin(),
                       spherePartitionSides.begin(), spherePartitioningByCones);
-    //std::cout << spherePartitionSides << std::endl;
 
     static thrust::device_vector<unsigned int> sphereLeftIndices(spheres.CurrentSize()+1);
     sphereLeftIndices.resize(spheres.CurrentSize()+1);
+    sphereLeftIndices[0] = 0; // Should be handled by resize not being destructive.
     static thrust::device_vector<unsigned int> sphereRightIndices(spheres.CurrentSize()+1);
     sphereRightIndices.resize(spheres.CurrentSize()+1);
-    sphereLeftIndices[0] = 0; // Should be handled by resize not being destructive.
+    sphereRightIndices[0] = 0; // Should be handled by resize not being destructive.
     
     thrust::transform_inclusive_scan(spherePartitionSides.begin(), spherePartitionSides.end(),
                                      sphereLeftIndices.begin()+1, leftToOne, plus);
-    sphereRightIndices[0] = 0; // Should be handled by resize not being destructive.
     thrust::transform_inclusive_scan(spherePartitionSides.begin(), spherePartitionSides.end(),
                                      sphereRightIndices.begin()+1, rightToOne, plus);
 
     AddSpheresMovedLeft addSpheresMovedLeft(sphereLeftIndices);
     thrust::transform(sphereRightIndices.begin(), sphereRightIndices.end(), sphereRightIndices.begin(), addSpheresMovedLeft);
-    
-    //std::cout << "sphereLeftIndices:\n" << sphereLeftIndices << std::endl;
-    //std::cout << "sphereRightIndices:\n" << sphereRightIndices << std::endl;
 
     // Scatter spheres
     spheres.Partition(spherePartitionSides, sphereLeftIndices, sphereRightIndices);
@@ -429,8 +427,6 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     thrust::transform(BeginUnfinishedRayPartitions(), EndUnfinishedRayPartitions(), BeginUnfinishedSpherePartitions(),
                       partitionWrapper, computeNewLeftNodePartitions);
     ComputeNewRightNodePartitions computeNewRightNodePartitions(rayLeftIndices, sphereLeftIndices, sphereRightIndices);
-    // std::cout << "rayPartitions:\n" << rayPartitions << std::endl;
-    // std::cout << "rayLeftIndices:\n" << rayLeftIndices << std::endl;
     thrust::transform(BeginUnfinishedRayPartitions(), EndUnfinishedRayPartitions(), BeginUnfinishedSpherePartitions(),
                       partitionWrapper+UnfinishedNodes(), computeNewRightNodePartitions);
     
@@ -462,35 +458,44 @@ struct MarkLeafSize {
 
 __constant__ unsigned int d_leafPartitionOffset;
 struct NewPrimPartitions {
-    uint2 *nextPartitions, *leafPartitions;
-    unsigned int* newBegins;
+    uint2 *oldPartitions;
+    unsigned int *leafIndices;
+    bool *isLeafs;
 
-    NewPrimPartitions(thrust::device_vector<uint2>& nPartitions,
+    unsigned int *newBegins;
+    uint2 *nextPartitions, *leafPartitions;
+
+    NewPrimPartitions(thrust::device_vector<uint2>::iterator oPartitions,
+                      thrust::device_vector<unsigned int>& lIndices,
+                      thrust::device_vector<bool>& isLeafs,
+                      thrust::device_vector<unsigned int>& nBegins,
+                      thrust::device_vector<uint2>& nPartitions,
                       const unsigned int leafPartitionOffset, 
                       thrust::device_vector<uint2>& lPartitions,
-                      const unsigned int leafOffset, 
-                      thrust::device_vector<unsigned int>& nBegins) 
-        : nextPartitions(thrust::raw_pointer_cast(nPartitions.data())),
-          leafPartitions(thrust::raw_pointer_cast(lPartitions.data()) + leafOffset),
-          newBegins(thrust::raw_pointer_cast(nBegins.data())) {
+                      const unsigned int leafOffset) 
+        : oldPartitions(RawPointer(oPartitions)),
+          leafIndices(RawPointer(lIndices)),
+          isLeafs(RawPointer(isLeafs)),
+          newBegins(RawPointer(nBegins)),
+          nextPartitions(RawPointer(nPartitions)),
+          leafPartitions(RawPointer(lPartitions) + leafOffset) {
         cudaMemcpyToSymbol(d_leafPartitionOffset, &leafPartitionOffset, sizeof(unsigned int));
     }
     
     __host__ __device__
-    unsigned int operator()(const thrust::tuple<uint2, unsigned int, bool> input,
-                            const unsigned int threadId) const {
-        const uint2 oldPartition = thrust::get<0>(input);
+    void operator()(const unsigned int threadId) const {
+        const uint2 oldPartition = oldPartitions[threadId];
         const unsigned int range = oldPartition.y - oldPartition.x;
-        const bool isLeaf = thrust::get<2>(input);
+        const bool isLeaf = isLeafs[threadId];
         unsigned int newBegin = newBegins[oldPartition.x];
         newBegin += isLeaf ? d_leafPartitionOffset : 0;
         const uint2 partition = make_uint2(newBegin, newBegin + range);
-        const unsigned int leafIndex = thrust::get<1>(input);
+        const unsigned int leafIndex = leafIndices[threadId];
         const unsigned int index = isLeaf ? leafIndex : threadId - leafIndex;
         uint2* output = isLeaf ? leafPartitions : nextPartitions;
         output[index] = partition;
-        return index;
     }
+    
 };
 
 bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
@@ -512,7 +517,6 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
                                      BoolToInt(), plus);
     const unsigned int newLeafNodes = leafIndices[leafIndices.size()-1];
     const unsigned int oldLeafNodes = DoneNodes();
-    //std::cout << "Leaf Indices:\n" << leafIndices << std::endl;
 
     if (newLeafNodes == 0) return false;
 
@@ -531,22 +535,20 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     CalcOwners(rayPartitions, owners);
     
     const unsigned int oldRayLeafs = rays.LeafRays();
-    // std::cout << "rays before leaf partitioning:\n" << rays.ToString() << std::endl;
     rays.PartitionLeafs(isLeaf, rayLeafNodeIndices, rayPartitions, owners);
-    // std::cout << "rays after leaf partitioning:\n" << rays.ToString() << std::endl;
     // Owners now hold the new ray begin indices
     
     // New node ray partitions
     nextRayPartitions.resize(rayPartitions.size() - newLeafNodes);
-    // std::cout << "doneRayPartitions.capacity: " << doneRayPartitions.capacity() << std::endl;
-    // std::cout << "doneRayPartitions.size: " << doneRayPartitions.size() << std::endl;
-    // std::cout << "doneRayPartitions.newsize: " << (doneRayPartitions.size() + newLeafNodes) << std::endl;
     doneRayPartitions.resize(doneRayPartitions.size() + newLeafNodes);
+
     thrust::zip_iterator<thrust::tuple<Uint2Iterator, UintIterator, BoolIterator> > nodePartitionsInput =
         thrust::make_zip_iterator(thrust::make_tuple(BeginUnfinishedRayPartitions(), leafIndices.begin(), isLeaf.begin()));
-    NewPrimPartitions newPrimPartitions(nextRayPartitions, oldRayLeafs, doneRayPartitions, oldLeafNodes, owners);
-    thrust::transform(nodePartitionsInput, nodePartitionsInput + unfinishedNodes, thrust::counting_iterator<unsigned int>(0),
-                      owners.begin() /* dummy var so I can use thrust::transform, owners is garbage afterwards */, newPrimPartitions);
+    NewPrimPartitions newPrimPartitions(BeginUnfinishedRayPartitions(), leafIndices, isLeaf,
+                                        owners, nextRayPartitions, oldRayLeafs, doneRayPartitions, oldLeafNodes);
+    thrust::for_each(thrust::counting_iterator<unsigned int>(0), 
+                     thrust::counting_iterator<unsigned int>(unfinishedNodes),
+                     newPrimPartitions);
     
     rayPartitions.swap(nextRayPartitions);
 
@@ -557,11 +559,9 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     leafNodeValues = thrust::make_zip_iterator(thrust::make_tuple(isLeaf.begin(), BeginUnfinishedSpherePartitions()));
     thrust::transform_inclusive_scan(leafNodeValues, leafNodeValues + unfinishedNodes, 
                                      sphereLeafNodeIndices.begin()+1, MarkLeafSize(), plus);
-    // std::cout << "Sphere Leaf Node Indices:\n" << sphereLeafNodeIndices << std::endl;
 
     owners.resize(spheres.CurrentSize());
     CalcOwners(spherePartitions, owners);
-    // std::cout << "Sphere owners:\n" << owners << std::endl;
 
     const unsigned int oldSphereLeafs = spheres.DoneSize();
     spheres.PartitionLeafs(isLeaf, sphereLeafNodeIndices, spherePartitions, owners);
@@ -570,9 +570,11 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     nextSpherePartitions.resize(spherePartitions.size() - newLeafNodes);
     doneSpherePartitions.resize(doneSpherePartitions.size() + newLeafNodes);
     nodePartitionsInput = thrust::make_zip_iterator(thrust::make_tuple(BeginUnfinishedSpherePartitions(), leafIndices.begin(), isLeaf.begin()));
-    newPrimPartitions = NewPrimPartitions(nextSpherePartitions, oldSphereLeafs, doneSpherePartitions, oldLeafNodes, owners);
-    thrust::transform(nodePartitionsInput, nodePartitionsInput + unfinishedNodes, thrust::counting_iterator<unsigned int>(0),
-                      owners.begin() /* dummy var so I can use thrust::transform, owners is garbage afterwards */, newPrimPartitions);
+    newPrimPartitions = NewPrimPartitions(BeginUnfinishedSpherePartitions(), leafIndices, isLeaf,
+                                          owners, nextSpherePartitions, oldSphereLeafs, doneSpherePartitions, oldLeafNodes);
+    thrust::for_each(thrust::counting_iterator<unsigned int>(0),
+                     thrust::counting_iterator<unsigned int>(unfinishedNodes),
+                     newPrimPartitions);
     
     spherePartitions.swap(nextSpherePartitions);
 

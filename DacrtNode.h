@@ -42,6 +42,9 @@ inline std::ostream& operator<<(std::ostream& s, const DacrtNode& n){
 
 
 class DacrtNodes {
+private:
+    thrust::device_vector<unsigned int> scan1;
+    thrust::device_vector<unsigned int> scan2;
 public:
     // TODO partition end always equal the next partitions start, so we can
     // reduce the uint2 to an uint, reducing memory overhead.
@@ -56,14 +59,7 @@ public:
 
 public:
 
-    DacrtNodes(const size_t capacity) 
-        : rayPartitions(capacity), spherePartitions(capacity),
-          nextRayPartitions(capacity), nextSpherePartitions(capacity),
-          doneRayPartitions(capacity), doneSpherePartitions(capacity) {
-        rayPartitions.resize(0); spherePartitions.resize(0);
-        nextRayPartitions.resize(0); nextSpherePartitions.resize(0);
-        doneRayPartitions.resize(0); doneSpherePartitions.resize(0);
-    }
+    DacrtNodes(const size_t capacity);
 
     void Reset();
 
