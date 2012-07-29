@@ -13,7 +13,8 @@
 
 __device__ unsigned int d_globalPoolNextOwner;
 __device__ unsigned int d_globalPoolNextIndex;
-const unsigned int BATCH_SIZE = 32;
+
+#define LOCAL_POOL_SCALE 4
     
 template<bool USE_GLOBAL_OWNER, bool BLOCK_DIM_LARGER_THAN_WARPSIZE, class Operation> __global__ 
 void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitionLength,
@@ -29,7 +30,7 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
     while (true) {
         if (threadIdx.x == 0) {
             // Fetch new pool data TODO use a larger local pool, fx 3 * blockDim.
-            localPoolNextIndex = atomicAdd(&d_globalPoolNextIndex, blockDim.x);
+            localPoolNextIndex = atomicAdd(&d_globalPoolNextIndex, LOCAL_POOL_SCALE * blockDim.x);
 
             if (USE_GLOBAL_OWNER) {
                 // TODO Paralize the fetch loop over shared data in parallel,
@@ -64,10 +65,31 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
         // } while (partition <= localIndex);
         // --localOwner;
 
+        // Manual freaking loop unrolling. Thanks nvcc
         uint2 partition = partitions[localOwner];
         while (localIndex >= partition.y)
             partition = partitions[++localOwner];
+        // Perform logic
+        operation(localIndex, localOwner);
         
+        localIndex += blockDim.x;
+        if (localIndex >= elements) return; // terminate if we exceed the amount of indices
+        while (localIndex >= partition.y)
+            partition = partitions[++localOwner];
+        // Perform logic
+        operation(localIndex, localOwner);
+
+        localIndex += blockDim.x;
+        if (localIndex >= elements) return; // terminate if we exceed the amount of indices
+        while (localIndex >= partition.y)
+            partition = partitions[++localOwner];
+        // Perform logic
+        operation(localIndex, localOwner);
+
+        localIndex += blockDim.x;
+        if (localIndex >= elements) return; // terminate if we exceed the amount of indices
+        while (localIndex >= partition.y)
+            partition = partitions[++localOwner];
         // Perform logic
         operation(localIndex, localOwner);
     }
@@ -102,7 +124,8 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
     const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     
     const bool BLOCK_DIM_LARGER_THAN_WARPSIZE = blockDim > Meta::CUDA::activeCudaDevice.warpSize;
-    std::cout << "ForEachWithOwner<" << USE_GLOBAL_OWNER << ", " << BLOCK_DIM_LARGER_THAN_WARPSIZE << "><<<" << blocks << ", " << blockDim << ">>>" << std::endl;
+    // std::cout << "ForEachWithOwner<" << USE_GLOBAL_OWNER << ", " << BLOCK_DIM_LARGER_THAN_WARPSIZE << ">" <<
+    //     "<<<" << blocks << ", " << blockDim << ">>>" << std::endl;
     
     if (USE_GLOBAL_OWNER) {
         if (BLOCK_DIM_LARGER_THAN_WARPSIZE) {
@@ -125,6 +148,7 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
                  elements, operation);
         }
     }
+    CHECK_FOR_CUDA_ERROR();
 }
 
 #endif
