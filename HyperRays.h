@@ -95,6 +95,8 @@ public:
     static inline thrust::device_vector<float4>::iterator GetAxisUVs(Iterator rays) {
         return thrust::get<1>(rays.get_iterator_tuple());
     }
+    static inline thrust::device_vector<float4>::iterator GetDirections(Iterator rays) { return GetAxisUVs(rays); }
+        
 
     HyperRays(const size_t size)
         : origins(thrust::device_vector<float4>(size)),
