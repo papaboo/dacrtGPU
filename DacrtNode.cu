@@ -373,8 +373,8 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     static thrust::device_vector<PartitionSide> rayPartitionSides(rayCount);
     rayPartitionSides.resize(rayCount);
 
-    // Calculate current ray owners. Is apparently fast with old implementation
-    // instead of workqeueu.
+    // Calculate current ray owners. Is apparently faster with old
+    // implementation instead of a workqueue.
 #if 0
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
@@ -388,8 +388,9 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
 #else
     RayPartitionSide rayPartitionSide = RayPartitionSide(rays.BeginInnerRays(), splitAxis, splitValues,
                                                          rayPartitionSides);
-    ForEachWithOwners(rayPartitions, 0, rayPartitions.size(), 
-                      rayCount, rayPartitionSide);
+    ForEachWithOwners(rayCount, 
+                      rayPartitions.begin(), rayPartitions.end(), 
+                      rayPartitionSide);
 #endif
     
     // Calculate the indices for the rays moved left using scan
@@ -695,8 +696,9 @@ void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& sphere
                                       spheres.doneIndices, 
                                       spheres.spheres.spheres,
                                       hits);
-    ForEachWithOwners(doneRayPartitions, 0, doneRayPartitions.size(),
-                      hits.size(), exhaustive);
+    ForEachWithOwners(hits.size(), 
+                      doneRayPartitions.begin(), doneRayPartitions.end(), 
+                      exhaustive);
 
     //std::cout << "hits:\n" << hits << std::endl;
 }

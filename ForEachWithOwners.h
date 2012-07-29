@@ -96,8 +96,8 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
 }
 
 template<class Operation>
-void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t partitionBegin, const size_t partitionEnd,
-                       const size_t elements, // replace with thrust counting iterator?
+void ForEachWithOwners(const size_t elements, // replace with thrust counting iterator?
+                       thrust::device_vector<uint2>::iterator partitionsBegin, thrust::device_vector<uint2>::iterator partitionsEnd, 
                        Operation& operation) {
 
     // std::cout << "ForEachWithOwners " << std::endl;
@@ -111,7 +111,7 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
     cudaMemcpyToSymbol(d_globalPoolNextOwner, &zero, sizeof(unsigned int), 0, cudaMemcpyHostToDevice);
     cudaMemcpyToSymbol(d_globalPoolNextIndex, &zero, sizeof(unsigned int), 0, cudaMemcpyHostToDevice);
 
-    const size_t partitionLength = partitionEnd - partitionBegin;
+    const size_t partitionLength = partitionsEnd - partitionsBegin;
     
     const unsigned int blocks = Meta::CUDA::activeCudaDevice.multiProcessorCount;
     const bool USE_GLOBAL_OWNER = false; // depends on some partitionLength : elements ratio
@@ -130,21 +130,21 @@ void ForEachWithOwners(thrust::device_vector<uint2>& partitions, const size_t pa
     if (USE_GLOBAL_OWNER) {
         if (BLOCK_DIM_LARGER_THAN_WARPSIZE) {
             ForeachWithOwnerKernel<true, true><<<blocks, blockDim>>>
-                (thrust::raw_pointer_cast(partitions.data()) + partitionBegin, partitionLength,
+                (RawPointer(partitionsBegin), partitionLength,
                  elements, operation);
         } else {
             ForeachWithOwnerKernel<true, false><<<blocks, blockDim>>>
-                (thrust::raw_pointer_cast(partitions.data()) + partitionBegin, partitionLength,
+                (RawPointer(partitionsBegin), partitionLength,
                  elements, operation);
         }
     } else {
         if (BLOCK_DIM_LARGER_THAN_WARPSIZE) {
             ForeachWithOwnerKernel<false, true><<<blocks, blockDim>>>
-                (thrust::raw_pointer_cast(partitions.data()) + partitionBegin, partitionLength,
+                (RawPointer(partitionsBegin), partitionLength,
                  elements, operation);
         } else {
             ForeachWithOwnerKernel<false, false><<<blocks, blockDim>>>
-                (thrust::raw_pointer_cast(partitions.data()) + partitionBegin, partitionLength,
+                (RawPointer(partitionsBegin), partitionLength,
                  elements, operation);
         }
     }

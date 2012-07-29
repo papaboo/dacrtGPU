@@ -56,8 +56,9 @@ int main(int argc, char *argv[]){
     thrust::device_vector<unsigned int> owners(704);
 
     WriteOwner writeOwner(owners);
-    ForEachWithOwners(partitions, 0, partitions.size(),
-                      owners.size(), writeOwner);
+    ForEachWithOwners(owners.size(), 
+                      partitions.begin(), partitions.end(), 
+                      writeOwner);
 
     std::cout << owners << std::endl;
     

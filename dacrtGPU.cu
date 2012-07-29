@@ -50,13 +50,17 @@ int samples;
 // index. This means we can do our inclusive_scan's over the nodes instead or
 // rays and spheres. Can the same be done for non leaf partitions?
 
-// TODO
-
 // Work queue idea: Update the pointer to the next work 'pool' and do it as an
 // atomic operation. Then update the current ray owner afterwards. This can
 // either be done atomic or not. In any case if it isn't done at the exact same
 // time as the work index, the threads can simply iterate upwards until they find
 // the correct dacrtnode which owns the ray (this will need to be done anyway)
+/// RESULT
+// It seems that scan + operation is faster than a workqueue. Given everyones
+// obsession with work queues this may just be a problem with my old GPU, but I
+// need to test it further. The test case can be found in DacrtNode
+
+// TODO
 
 // Can we do ray partitioning without converting them to hyper rays? 
 // - Sort them by major axis.
@@ -84,9 +88,6 @@ int samples;
 /// If I do this then I need to do the same for dacrtnodes, so the nodes still
 /// follow an increasing partition layout.
 
-// When only a few rays remain, don't paralize intersection over all rays, but
-// do it over geometry instead.
-
 // Move randomly generated numbers to the GPU
 
 // Amortise geometry sorting cost by using a morton curve subdivision (everyone
@@ -94,6 +95,9 @@ int samples;
 
 // Amortise ray sorting cost by storing them in pixelwide packets (packets are
 // always crap at the N'th trace, can we dynamically sort them semi optimal?)
+
+// When only a few rays remain, don't paralize intersection over all rays, but
+// do it over geometry instead. (Not an issue as long as I'm doing my fixed bounce pathtracer)
 
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
