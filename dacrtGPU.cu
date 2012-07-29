@@ -175,7 +175,7 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
         }
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
-        nodes.FastExhaustiveIntersect(rays, sphereIndices, hitIDs);
+        nodes.ExhaustiveIntersect(rays, sphereIndices, hitIDs);
 
         //cout << "hitIDs: " << hitIDs << endl;
 
@@ -240,7 +240,7 @@ int main(int argc, char *argv[]){
     Fragments frags(WIDTH * HEIGHT * samples);
     thrust::device_vector<float4> colors(WIDTH * HEIGHT);
 
-    SpheresGeometry geom = SpheresGeometry::CornellBox(30);
+    SpheresGeometry geom = SpheresGeometry::CornellBox(50);
     // cout << geom << endl;
 
     for (int i = 0; i < iterations; ++i) {

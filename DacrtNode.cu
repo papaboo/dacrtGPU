@@ -96,12 +96,26 @@ struct CalcSplitInfo {
 };
 
 struct RayPartitionSide {
-    Axis* splitAxis;
-    float* splitValues;
+    float4 *rayOrigins, *rayAxisUVs;
+    
+    Axis *splitAxis;
+    float *splitValues;
+    
+    // result
+    PartitionSide *partitionSides;
     
     RayPartitionSide(thrust::device_vector<Axis>& axis, thrust::device_vector<float>& values)
         : splitAxis(thrust::raw_pointer_cast(axis.data())), 
           splitValues(thrust::raw_pointer_cast(values.data())) {}
+
+    RayPartitionSide(HyperRays::Iterator rays,
+                     thrust::device_vector<Axis>& axis, thrust::device_vector<float>& values,
+                     thrust::device_vector<PartitionSide>& sides)
+        : rayOrigins(RawPointer(HyperRays::GetOrigins(rays))),
+          rayAxisUVs(RawPointer(HyperRays::GetAxisUVs(rays))),
+          splitAxis(RawPointer(axis)), 
+          splitValues(RawPointer(values)),
+          partitionSides(RawPointer(sides)) {}
     
     __host__ __device__
     PartitionSide operator()(thrust::tuple<thrust::tuple<float4, float4>, unsigned int> ray) {
@@ -121,6 +135,28 @@ struct RayPartitionSide {
         
         return rayVals[axis] <= splitVal ? LEFT : RIGHT;
     }
+    
+    __host__ __device__
+    void operator()(const unsigned int index, const unsigned int owner) const {
+        const Axis axis = splitAxis[owner];
+        const float splitVal = splitValues[owner];
+
+        // IDEA since most owners will cover a warp or more, perhaps it will be
+        // slightly faster to branch on (axis < 3) and avoid a memory lookup?
+        // Only ever so slightly though.
+        float rayVals[5];
+        const float3 origin = make_float3(rayOrigins[index]);
+        rayVals[0] = origin.x;
+        rayVals[1] = origin.y;
+        rayVals[2] = origin.z;
+        
+        const float3 axisUV = make_float3(rayAxisUVs[index]);
+        rayVals[3] = axisUV.y;
+        rayVals[4] = axisUV.z;
+        
+        partitionSides[index]  = rayVals[axis] <= splitVal ? LEFT : RIGHT;
+    }
+    
 };
 
 template <int S>
@@ -333,21 +369,28 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     CalcSplitInfo calcSplitInfo;    
     thrust::transform(cubes.BeginBounds(), cubes.EndBounds(), axisInfo, calcSplitInfo);    
 
-    // Calculate current ray owners. TODO Use a work queue instead
+    // Calculate the partition side
+    static thrust::device_vector<PartitionSide> rayPartitionSides(rayCount);
+    rayPartitionSides.resize(rayCount);
+
+    // Calculate current ray owners.
+#if 0
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
     CalcOwners(rayPartitions, rayOwners);
     thrust::zip_iterator<thrust::tuple<HyperRays::Iterator, UintIterator> > raysWithOwners
         = thrust::make_zip_iterator(thrust::make_tuple(rays.BeginInnerRays(), rayOwners.begin()));
 
-    // Calculate the partition side
-    static thrust::device_vector<PartitionSide> rayPartitionSides(rayCount);
-    rayPartitionSides.resize(rayCount);
-
     RayPartitionSide rayPartitionSide = RayPartitionSide(splitAxis, splitValues);
     thrust::transform(raysWithOwners, raysWithOwners + rayCount, 
                       rayPartitionSides.begin(), rayPartitionSide);
-
+#else
+    RayPartitionSide rayPartitionSide = RayPartitionSide(rays.BeginInnerRays(), splitAxis, splitValues,
+                                                         rayPartitionSides);
+    ForEachWithOwners(rayPartitions, 0, rayPartitions.size(), 
+                      rayCount, rayPartitionSide);
+#endif
+    
     // Calculate the indices for the rays moved left using scan
     static thrust::device_vector<unsigned int> rayLeftIndices(rayCount+1);
     rayLeftIndices.resize(rayCount+1);
@@ -504,7 +547,7 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
 
     size_t unfinishedNodes = UnfinishedNodes();
 
-    // TODO make isLeaf unsigned int and reuse for indices. isLeaf info is
+    // TODO make isLeaf unsigned int and reuse for indices? isLeaf info is
     // stored in an index and it's neighbour.
     thrust::transform(BeginUnfinishedRayPartitions(), EndUnfinishedRayPartitions(), BeginUnfinishedSpherePartitions(),
                       isLeaf.begin(), IsNodeLeaf());
@@ -537,6 +580,7 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     const unsigned int oldRayLeafs = rays.LeafRays();
     rays.PartitionLeafs(isLeaf, rayLeafNodeIndices, rayPartitions, owners);
     // Owners now hold the new ray begin indices
+    thrust::device_vector<unsigned int>& newRayIndices = owners;
     
     // New node ray partitions
     nextRayPartitions.resize(rayPartitions.size() - newLeafNodes);
@@ -545,7 +589,7 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
     thrust::zip_iterator<thrust::tuple<Uint2Iterator, UintIterator, BoolIterator> > nodePartitionsInput =
         thrust::make_zip_iterator(thrust::make_tuple(BeginUnfinishedRayPartitions(), leafIndices.begin(), isLeaf.begin()));
     NewPrimPartitions newPrimPartitions(BeginUnfinishedRayPartitions(), leafIndices, isLeaf,
-                                        owners, nextRayPartitions, oldRayLeafs, doneRayPartitions, oldLeafNodes);
+                                        newRayIndices, nextRayPartitions, oldRayLeafs, doneRayPartitions, oldLeafNodes);
     thrust::for_each(thrust::counting_iterator<unsigned int>(0), 
                      thrust::counting_iterator<unsigned int>(unfinishedNodes),
                      newPrimPartitions);
@@ -586,75 +630,6 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
 // *** EXHAUSTIVE INTERSECTION ***
 
 struct ExhaustiveIntersection {
-    uint2* spherePartitions;
-    unsigned int* sphereIndices;
-    Sphere* spheres;
-    
-    ExhaustiveIntersection(thrust::device_vector<uint2>& sPartitions,
-                           thrust::device_vector<unsigned int>& sIndices, 
-                           thrust::device_vector<Sphere>& ss)
-        : spherePartitions(thrust::raw_pointer_cast(sPartitions.data())), 
-          sphereIndices(thrust::raw_pointer_cast(sIndices.data())), 
-          spheres(thrust::raw_pointer_cast(ss.data())) {}
-
-    /**
-     * Takes a ray as argument and intersects it against all spheres referenced
-     * by its parent DacrtNode.
-     *
-     * Returns the index of the intersected sphere and stores the distance to it
-     * in the w component of the ray's direction.
-     */
-    __host__ __device__
-    thrust::tuple<unsigned int, float4> operator()(const thrust::tuple<unsigned int, thrust::tuple<float4, float4> > input) const {
-        const unsigned int owner = thrust::get<0>(input);
-        const thrust::tuple<float4, float4> ray = thrust::get<1>(input);
-        const float3 origin = make_float3(thrust::get<0>(ray));
-        const float3 dir = normalize(HyperRay::AxisUVToDirection(make_float3(thrust::get<1>(ray))));
-        
-        const uint2 spherePartition = spherePartitions[owner];
-        float hitT = 1e30f;
-        unsigned int hitID = SpheresGeometry::MISSED;
-        
-        for (unsigned int g = spherePartition.x; g < spherePartition.y; ++g) {
-            const unsigned int sphereId = sphereIndices[g];
-            const Sphere s = spheres[sphereId];
-            const float t = s.Intersect(origin, dir);
-            if (0 < t && t < hitT) {
-                hitID = sphereId;
-                hitT = t;
-            }
-        }
-        
-        return thrust::tuple<unsigned int, float4>(hitID, make_float4(dir, hitT));
-    }
-};
-
-void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
-                                     thrust::device_vector<unsigned int>& hits) {
-    
-    //std::cout << "ExhaustiveIntersect" << std::endl;
-    hits.resize(rays.LeafRays());
-
-    static thrust::device_vector<unsigned int> owners(rays.LeafRays()); // TODO Can be made global, then redo as workqeueu if possible
-    owners.resize(rays.LeafRays());
-    CalcOwners(doneRayPartitions, owners);
-    
-    thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator> >
-        rayBegin(thrust::make_tuple(owners.begin(), 
-                                    rays.BeginLeafRays()));
-
-    thrust::zip_iterator<thrust::tuple<UintIterator, Float4Iterator> > 
-        resBegin(thrust::make_tuple(hits.begin(), 
-                                    HyperRays::GetAxisUVs(rays.BeginLeafRays())));
-
-    ExhaustiveIntersection exhaustive(doneSpherePartitions, spheres.doneIndices, spheres.spheres.spheres);
-    thrust::transform(rayBegin, rayBegin + rays.LeafRays(), resBegin, exhaustive);
-
-    // std::cout << "hits:\n" << hits << std::endl;    
-}
-
-
-struct FastExhaustiveIntersection {
     float4 *rayOrigins, *rayAxisUVs;
     uint2 *spherePartitions;
     unsigned int *sphereIndices;
@@ -662,11 +637,11 @@ struct FastExhaustiveIntersection {
 
     unsigned int *hitIDs;
     
-    FastExhaustiveIntersection(HyperRays& rays, 
-                               thrust::device_vector<uint2>& sPartitions,
-                               thrust::device_vector<unsigned int>& sIndices, 
-                               thrust::device_vector<Sphere>& ss,
-                               thrust::device_vector<unsigned int>& hits)
+    ExhaustiveIntersection(HyperRays& rays, 
+                           thrust::device_vector<uint2>& sPartitions,
+                           thrust::device_vector<unsigned int>& sIndices, 
+                           thrust::device_vector<Sphere>& ss,
+                           thrust::device_vector<unsigned int>& hits)
         : rayOrigins(thrust::raw_pointer_cast(rays.origins.data())),
           rayAxisUVs(thrust::raw_pointer_cast(rays.axisUVs.data())),
           spherePartitions(thrust::raw_pointer_cast(sPartitions.data())), 
@@ -706,19 +681,19 @@ struct FastExhaustiveIntersection {
     }
 };
 
-void DacrtNodes::FastExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
-                                         thrust::device_vector<unsigned int>& hits) {
+void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
+                                     thrust::device_vector<unsigned int>& hits) {
     
-    // std::cout << "FastExhaustiveIntersect" << std::endl;
+    // std::cout << "ExhaustiveIntersect" << std::endl;
     hits.resize(rays.LeafRays());
 
     // std::cout << "doneRayPartitions:\n" << doneRayPartitions <<std::endl;
 
-    FastExhaustiveIntersection exhaustive(rays.leafRays, 
-                                          doneSpherePartitions, 
-                                          spheres.doneIndices, 
-                                          spheres.spheres.spheres,
-                                          hits);
+    ExhaustiveIntersection exhaustive(rays.leafRays, 
+                                      doneSpherePartitions, 
+                                      spheres.doneIndices, 
+                                      spheres.spheres.spheres,
+                                      hits);
     ForEachWithOwners(doneRayPartitions, 0, doneRayPartitions.size(),
                       hits.size(), exhaustive);
 
