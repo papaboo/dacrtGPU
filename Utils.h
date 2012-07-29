@@ -59,6 +59,9 @@ inline T* RawPointer(thrust::device_vector<T>& v) {
 inline uint2* RawPointer(typename thrust::device_vector<uint2>::iterator v) {
     return thrust::raw_pointer_cast(&*v);
 }
+inline float4* RawPointer(typename thrust::device_vector<float4>::iterator v) {
+    return thrust::raw_pointer_cast(&*v);
+}
 
 
 inline int ToByte(float v) {
