@@ -48,6 +48,19 @@ inline T Clamp01(T v) {
     return v < T(0) ? T(0) : v > T(1) ? T(1) : v;
 }
 
+template <class T>
+inline T* RawPointer(thrust::device_vector<T>& v) {
+    return thrust::raw_pointer_cast(v.data());
+}
+// template <class T>
+// inline T* Raw_pointer(typename thrust::device_vector<T>::iterator v) {
+//     return thrust::raw_pointer_cast(&*v);
+// }
+inline uint2* RawPointer(typename thrust::device_vector<uint2>::iterator v) {
+    return thrust::raw_pointer_cast(&*v);
+}
+
+
 inline int ToByte(float v) {
     return int(pow(Clamp01(v),1/2.2f)*255.0f+.5f);
 }
