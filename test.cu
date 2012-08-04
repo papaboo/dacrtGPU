@@ -9,6 +9,8 @@
 
 #include <iostream>
 
+#define THRUST_DEBUG 1
+
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 #include <thrust/version.h>
@@ -20,7 +22,6 @@ using std::endl;
  * similar issues
  * https://groups.google.com/forum/#!topic/thrust-users/0pZwBjT0n14
  */
-
 int main(int argc, char *argv[]){
 
     cout << "Thrust v" << THRUST_MAJOR_VERSION << "." << THRUST_MINOR_VERSION << endl;
