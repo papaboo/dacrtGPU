@@ -10,15 +10,16 @@
 
 #include <DacrtNode.h>
 #include <HyperRays.h>
+#include <Meta/CUDA.h>
+#include <ToString.h>
+#include <Utils.h>
+
 
 #include <ostream>
 #include <iomanip>
 
 #include <thrust/host_vector.h>
 #include <thrust/reduce.h>
-
-#include <ToString.h>
-#include <Utils.h>
 
 // *** HyperCube ***
 
@@ -79,15 +80,13 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
                              thrust::device_vector<uint2> rayPartitions,
                              const size_t cubes) {
 
-    Resize(cubes);
-
     unsigned int rayRange = rayEnd - rayBegin;
-    thrust::device_vector<SignedAxis> A(rayRange);
-    thrust::device_vector<float2> X(rayRange);
-    thrust::device_vector<float2> Y(rayRange);
-    thrust::device_vector<float2> Z(rayRange);
-    thrust::device_vector<float2> U(rayRange);
-    thrust::device_vector<float2> V(rayRange);
+    static thrust::device_vector<SignedAxis> A(rayRange); A.resize(rayRange);
+    static thrust::device_vector<float2> X(rayRange); X.resize(rayRange);
+    static thrust::device_vector<float2> Y(rayRange); Y.resize(rayRange);
+    static thrust::device_vector<float2> Z(rayRange); Z.resize(rayRange);
+    static thrust::device_vector<float2> U(rayRange); U.resize(rayRange);
+    static thrust::device_vector<float2> V(rayRange); V.resize(rayRange);
 
     HyperCubes::Iterator transBegin =
         thrust::make_zip_iterator(thrust::make_tuple(A.begin(), X.begin(), Y.begin(), Z.begin(), U.begin(), V.begin()));
@@ -98,9 +97,25 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
     // TODO HACK Move everything to the host because reduce_by_key fails on 330M
     // TODO Remove owners, at the least reduce by a partition start flag instead
     // e.g. |1|0|0|1|0|0|0|
-    thrust::device_vector<unsigned int> owners(rayRange);
-    DacrtNodes::CalcOwners(rayPartitions, owners);
-    thrust::host_vector<unsigned int> hostRayOwners(owners.begin(), owners.end());
+    static thrust::device_vector<unsigned int> rayOwners(rayRange); rayOwners.resize(rayRange);
+    DacrtNodes::CalcOwners(rayPartitions, rayOwners);
+
+#if 1
+    // Reduce on the GPU
+    Iterator valuesBegin = 
+        thrust::make_zip_iterator(thrust::make_tuple(A.begin(), X.begin(), Y.begin(), 
+                                                     Z.begin(), U.begin(), V.begin()));
+    Resize(cubes);
+    static thrust::device_vector<int> cubeOwners(128); cubeOwners.resize(cubes); // dummy var. I don't really care about this.
+    
+    thrust::reduce_by_key(rayOwners.begin(), rayOwners.end(),
+                          valuesBegin, cubeOwners.begin(), Begin(), 
+                          thrust::equal_to<int>(), ReduceHyperCubes());
+    CHECK_FOR_CUDA_ERROR();
+    
+#else
+    // Reduce on the CPU
+    thrust::host_vector<unsigned int> hostRayOwners(rayOwners.begin(), rayOwners.end());
     thrust::host_vector<SignedAxis> hostA = A;
     thrust::host_vector<float2> hostX = X;
     thrust::host_vector<float2> hostY = Y;
@@ -149,6 +164,7 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
     z = hostResZ;
     u = hostResU;
     v = hostResV;
+#endif
 }
 
 size_t HyperCubes::Resize(const size_t s) {
