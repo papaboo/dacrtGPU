@@ -6,6 +6,7 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
+#include <Meta/CUDA.h>
 #include <RayContainer.h>
 #include <ToString.h>
 
@@ -87,6 +88,7 @@ void RayContainer::Partition(thrust::device_vector<PartitionSide>& partitionSide
     PartitionLeft partitionLeft(nextRays, leftIndices);
     thrust::transform(input, input + nextSize, thrust::counting_iterator<unsigned int>(0), 
                       leftIndices.begin(), partitionLeft);
+    CHECK_FOR_CUDA_ERROR(); 
 
     innerRays.Swap(nextRays);
 }
