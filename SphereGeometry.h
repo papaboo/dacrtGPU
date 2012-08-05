@@ -9,6 +9,7 @@
 #ifndef _GPU_DACRT_SPHERE_GEOMETRY_H_
 #define _GPU_DACRT_SPHERE_GEOMETRY_H_
 
+#include <AABB.h>
 #include <Material.h>
 #include <Sphere.h>
 #include <Utils.h>
@@ -44,6 +45,7 @@ public:
                                                UintIterator> > Iterator;
 
     thrust::device_vector<Sphere> spheres; // [x, y, z, radius]
+    AABB bounds;
     thrust::device_vector<unsigned int> materialIDs;
     Materials materials;
 
@@ -55,9 +57,10 @@ public:
           materials(0) {}
 
     SpheresGeometry(const thrust::host_vector<Sphere>& hostSpheres,
+                    const AABB& aabb,
                     const thrust::host_vector<unsigned int>& hostMatIDs,
                     Materials& mats)
-        : spheres(hostSpheres), materialIDs(hostMatIDs), materials(mats) {}
+        : spheres(hostSpheres), bounds(aabb), materialIDs(hostMatIDs), materials(mats) {}
 
     inline size_t Size() const { return spheres.size(); }
 
@@ -76,6 +79,13 @@ public:
     }
     inline Iterator End() { 
         return thrust::make_zip_iterator(thrust::make_tuple(spheres.end(), materialIDs.end()));
+    }
+
+    inline const AABB& GetBounds() const {
+        return bounds;
+    }
+    inline void SetBounds(const AABB& aabb) {
+        bounds = aabb;
     }
 
     /**

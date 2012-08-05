@@ -58,7 +58,10 @@ SpheresGeometry SpheresGeometry::CornellBox(const int n) {
         hSpheres[9 + s] = Sphere(center, radius);
     }
     
-    return SpheresGeometry(hSpheres, hMatIDs, mats);
+    AABB bounds = AABB::Create(make_float3(1.0f, 0.0f, 0.0f), 
+                               make_float3(99.0f, 81.6f, 170.0f));
+                               
+    return SpheresGeometry(hSpheres, bounds, hMatIDs, mats);
 }
 
 std::string SpheresGeometry::ToString() const {
