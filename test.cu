@@ -9,6 +9,7 @@
 
 #include <iostream>
 
+#undef  THRUST_DEBUG
 #define THRUST_DEBUG 1
 
 #include <thrust/host_vector.h>

@@ -1,3 +1,4 @@
+#undef  THRUST_DEBUG
 #define THRUST_DEBUG 1
 
 #include <thrust/detail/backend/cuda/reduce_intervals.h>
