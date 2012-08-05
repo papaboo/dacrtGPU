@@ -32,6 +32,17 @@ struct HyperRay {
 
     inline float3 Direction() const { return AxisUVToDirection(make_float3(axis, UV.x, UV.y)); }
 
+    __host__ __device__ 
+    inline static SignedAxis AxisFromDirection(const float3 dir) {
+        float3 absDir = make_float3(fabs(dir.x), fabs(dir.y), fabs(dir.z));
+        if (absDir.x > absDir.y && absDir.x > absDir.z) // x is dominant
+            return dir.x > 0.0f ? PosX : NegX;
+        else if (absDir.y > absDir.z) // y is dominant
+            return dir.y > 0.0f ? PosY : NegY;
+        else // z is dominant
+            return dir.z > 0.0f ? PosZ : NegZ;
+    }
+
     __host__ __device__
     inline static float3 DirectionToAxisUV(const float3 dir) {
 
