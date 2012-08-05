@@ -375,7 +375,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
 
     // Calculate current ray owners. Is apparently faster with old
     // implementation instead of a workqueue.
-#if 0
+#if 1
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
     CalcOwners(rayPartitions, rayOwners);
@@ -720,18 +720,6 @@ struct SetMarkers {
     }
 };
 
-struct WriteOwner {
-    unsigned int* owners;
-    
-    WriteOwner(thrust::device_vector<unsigned int>& os) 
-        : owners(thrust::raw_pointer_cast(os.data())) {}
-
-    __device__
-    void operator()(const unsigned int index, const unsigned int owner) const {
-        owners[index] = owner;
-    }
-};
-
 
 void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
                             thrust::device_vector<unsigned int>& owners) {
@@ -741,8 +729,8 @@ void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
 
     if (nodes == 1) return;
     
-    // TODO just fill the first 0 0 0 owners? Then start the scan at first
-    // marker. The decision wether or not to do this would be 
+    // TODO Start the scan at first marker? The decision wether or not to do
+    // this would be
     /// owners.size() / nodes > X
     // for some sane X.
 
