@@ -39,66 +39,6 @@ const int WIDTH = 256, HEIGHT = 256;
 int sqrtSamples;
 int samples;
 
-// Sort rays directly, not indices to avoid non-coallesced memory access (DONE)
-
-// Can we remove owners from rays and spheres? For the final coloring, the
-// owners can be created with just one scan. Try it out and then perhaps add a
-// work queue instead for calculating splitting sides.
-
-// Don't do full leaf moved left/right arrays. Just do it for the nodes and then
-// calculate the ray/sphere left/right leaf position after that using their
-// index. This means we can do our inclusive_scan's over the nodes instead or
-// rays and spheres. Can the same be done for non leaf partitions?
-
-// Work queue idea: Update the pointer to the next work 'pool' and do it as an
-// atomic operation. Then update the current ray owner afterwards. This can
-// either be done atomic or not. In any case if it isn't done at the exact same
-// time as the work index, the threads can simply iterate upwards until they find
-// the correct dacrtnode which owns the ray (this will need to be done anyway)
-/// RESULT
-// It seems that scan + operation is faster than a workqueue. Given everyones
-// obsession with work queues this may just be a problem with my old GPU, but I
-// need to test it further. The test case can be found in DacrtNode
-
-// TODO
-
-// Can we do ray partitioning without converting them to hyper rays? 
-// - Sort them by major axis.
-// - Extend all ray dirs, so their major axis has length 1.0f? Then the split
-// - will never be performed along that axis.
-// - Weigh all 6 dimensions when computing the bounding cone/plane split. (Needs
-//   to be done anyway with respect to the scenes AABB for evenly distributed
-//   spatial and angular split decisions) Then simply weigh the major axis angle
-//   as infinite to discourage its use. (Or use specialized kernels for each
-//   major axis, not that hard)
-// - Proceed as usual with plane creation and intersection (but now without the
-//   constant conversion trough a switch)
-
-// The left/right indice arrays also encode the left/right side info. Can we use
-// this instead of the PartitionSide arrays to save memory? Will it be just as fast?
-
-// Partition rays based on the geom bounds aswell? Perhaps do one or the other
-// depending on some ray/geom ratio or based on how much a ray cone overlaps
-// with a geometry bounding volume (e.g aabb)
-
-// Try different ray partitionings. The easiest is just a raw left-right
-// partition, but one that partitions rays spatially may perform better. (i.e
-// place the two children of a parent ray partition next to each other in
-// memory)
-/// If I do this then I need to do the same for dacrtnodes, so the nodes still
-/// follow an increasing partition layout.
-
-// Move randomly generated numbers to the GPU
-
-// Amortise geometry sorting cost by using a morton curve subdivision (everyone
-// else is anyway)
-
-// Amortise ray sorting cost by storing them in pixelwide packets (packets are
-// always crap at the N'th trace, can we dynamically sort them semi optimal?)
-
-// When only a few rays remain, don't paralize intersection over all rays, but
-// do it over geometry instead. (Not an issue as long as I'm doing my fixed bounce pathtracer)
-
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
     // cout << rays.ToString() << endl;
