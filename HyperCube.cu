@@ -6,6 +6,8 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
+#define REDUCE_ON_DEVICE 1
+
 #include <HyperCube.h>
 
 #include <DacrtNode.h>
@@ -18,8 +20,11 @@
 #include <ostream>
 #include <iomanip>
 
-#include <thrust/host_vector.h>
 #include <thrust/reduce.h>
+
+#if REDUCE_ON_DEVICE<1
+#include <thrust/host_vector.h>
+#endif
 
 // *** HyperCube ***
 
@@ -100,7 +105,7 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
     static thrust::device_vector<unsigned int> rayOwners(rayRange); rayOwners.resize(rayRange);
     DacrtNodes::CalcOwners(rayPartitions, rayOwners);
 
-#if 1
+#if REDUCE_ON_DEVICE
     // Reduce on the GPU
     Iterator valuesBegin = 
         thrust::make_zip_iterator(thrust::make_tuple(A.begin(), X.begin(), Y.begin(), 
