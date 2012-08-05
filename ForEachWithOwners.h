@@ -10,6 +10,12 @@
 #define _FOR_EACH_WITH_OWNERS_H_
 
 #include <Meta/CUDA.h>
+#include <Utils.h>
+
+#include <thrust/device_vector.h>
+#include <thrust/for_each.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/scan.h>
 
 __device__ unsigned int d_globalPoolNextOwner;
 __device__ unsigned int d_globalPoolNextIndex;
@@ -29,22 +35,15 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
     
     while (true) {
         if (threadIdx.x == 0) {
-            // Fetch new pool data TODO use a larger local pool, fx 3 * blockDim.
+            // Fetch new pool data
             localPoolNextIndex = atomicAdd(&d_globalPoolNextIndex, LOCAL_POOL_SCALE * blockDim.x);
 
             if (USE_GLOBAL_OWNER) {
+                localPoolNextOwner = d_globalPoolNextOwner;
+                
                 // TODO Paralize the fetch loop over shared data in parallel,
                 // then let the 'winner' write it's id in a res var. \o/
                 // (clover boy)
-                localPoolNextOwner = d_globalPoolNextOwner;
-                // uint partition;
-                // do {
-                //     partition = partitions[++localPoolNextOwner];
-                //     // NOTE: I'm specifically avoiding using y (end) because I
-                //     // will switch to unsigned int in a later version
-                // } while (partition <= localPoolNextIndex);
-                // d_globalPoolNextOwner = --localPoolNextOwner;
-                
                 uint2 partition = partitions[localPoolNextOwner];
                 while (localPoolNextIndex >= partition.y)
                     partition = partitions[++localPoolNextOwner];
@@ -58,12 +57,6 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
         if (localIndex >= elements) return; // terminate if we exceed the amount of indices
 
         if (USE_GLOBAL_OWNER) localOwner = localPoolNextOwner;
-        
-        // uint partition;
-        // do {
-        //     partition = partitions[++localOwner];
-        // } while (partition <= localIndex);
-        // --localOwner;
 
         // Manual freaking loop unrolling. Thanks nvcc
         uint2 partition = partitions[localOwner];
@@ -96,10 +89,10 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
 }
 
 template<class Operation>
-void ForEachWithOwners(const size_t elements, // replace with thrust counting iterator?
-                       thrust::device_vector<uint2>::iterator partitionsBegin, thrust::device_vector<uint2>::iterator partitionsEnd, 
-                       Operation& operation) {
-
+void ForEachWithOwnersUsingAtomics(const size_t elements, // replace with thrust counting iterator?
+                                   thrust::device_vector<uint2>::iterator partitionsBegin, thrust::device_vector<uint2>::iterator partitionsEnd, 
+                                   Operation& operation) {
+    
     // std::cout << "ForEachWithOwners " << std::endl;
     // std::cout << "From " << partitionBegin << " to " << partitionEnd << std::endl;
     // std::cout << "Partitions:\n" << partitions << std::endl;
@@ -149,6 +142,74 @@ void ForEachWithOwners(const size_t elements, // replace with thrust counting it
         }
     }
     CHECK_FOR_CUDA_ERROR();
+}
+
+struct SetMarks {
+    unsigned int* owners;
+    uint2* partitions;
+    SetMarks(thrust::device_vector<unsigned int>& owners,
+             thrust::device_vector<uint2>::iterator partitionsBegin)
+        : owners(RawPointer(owners)),
+          partitions(RawPointer(partitionsBegin)) {}
+    
+    __host__ __device__
+    void operator()(const unsigned int threadId) const {
+        const uint2 part = partitions[threadId];
+        owners[part.x] = 1;
+    }
+};
+
+template<class Operation> __global__ 
+void SimpleForeachWithOwnerKernel(const unsigned int *owners, const unsigned int elements, 
+                                  Operation operation) {
+    const unsigned int element = blockDim.x * blockIdx.x + threadIdx.x;
+    if (element < elements) operation(element, owners[element]);
+}
+
+template<class Operation> __global__ 
+void ReallySimpleForeachWithOwnerKernel(const unsigned int elements, 
+                                        Operation operation) {
+    const unsigned int element = blockDim.x * blockIdx.x + threadIdx.x;
+    if (element < elements) operation(element, 0);
+}
+
+template<class Operation>
+void SimpleForEachWithOwners(const size_t elements, // replace with thrust counting iterator?
+                             thrust::device_vector<uint2>::iterator partitionsBegin, thrust::device_vector<uint2>::iterator partitionsEnd, 
+                             Operation& operation) {
+    const size_t partitionLength = partitionsEnd - partitionsBegin;
+
+    static thrust::device_vector<unsigned int> owners(elements);
+    owners.resize(elements);
+    thrust::fill(owners.begin(), owners.end(), 0);
+    
+    if (partitionLength != 1) {
+        thrust::for_each(thrust::counting_iterator<unsigned int>(1), 
+                         thrust::counting_iterator<unsigned int>(partitionLength),
+                         SetMarks(owners, partitionsBegin));
+
+        thrust::inclusive_scan(owners.begin(), owners.end(), owners.begin());
+        
+        struct cudaFuncAttributes funcAttr;
+        cudaFuncGetAttributes(&funcAttr, SimpleForeachWithOwnerKernel<Operation>);
+        const unsigned int blockDim = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+        const unsigned int blocks = (elements-1) / 256 + 1;
+        SimpleForeachWithOwnerKernel<<<blocks, blockDim>>>(RawPointer(owners), elements, operation);
+    } else {
+        const unsigned int blockDim = 256;
+        const unsigned int blocks = (elements-1) / 256 + 1;
+        ReallySimpleForeachWithOwnerKernel<<<blocks, blockDim>>>(elements, operation);
+    }
+}
+
+template<class Operation>
+void ForEachWithOwners(const size_t elements, // replace with thrust counting iterator?
+                       thrust::device_vector<uint2>::iterator partitionsBegin, thrust::device_vector<uint2>::iterator partitionsEnd, 
+                       Operation& operation) {
+    if (Meta::CUDA::activeCudaDevice.major == 1)
+        SimpleForEachWithOwners(elements, partitionsBegin, partitionsEnd, operation);
+    else
+        ForEachWithOwnersUsingAtomics(elements, partitionsBegin, partitionsEnd, operation);
 }
 
 #endif
