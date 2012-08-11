@@ -52,17 +52,17 @@ TARGET_LINK_LIBRARIES(${PROJ_NAME}
 
 #segmented reduce test
 CUDA_ADD_EXECUTABLE(TestSegReduce
-  test.cu
+  Tests/thrust_reduce_by_key.cu
 )
 TARGET_LINK_LIBRARIES(TestSegReduce
   ${CUDA_LIBRARIES} #cuda rt
 )
 
 #segmented reduce test
-CUDA_ADD_EXECUTABLE(TestHat
-  hat.cu
+CUDA_ADD_EXECUTABLE(TestPlayground
+  Tests/reduce_by_key_playground.cu
 )
-TARGET_LINK_LIBRARIES(TestHat
+TARGET_LINK_LIBRARIES(TestPlayground
   ${CUDA_LIBRARIES} #cuda rt
 )
 
@@ -71,7 +71,7 @@ TARGET_LINK_LIBRARIES(TestHat
 CUDA_ADD_EXECUTABLE(TestWorkQueue
   Meta/CUDA.h
   Meta/CUDA.cu
-  WorkQueueTest.cu
+  Tests/WorkQueueCalcsOwners.cu
 )
 
 TARGET_LINK_LIBRARIES(TestWorkQueue
