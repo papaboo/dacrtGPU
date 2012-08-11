@@ -14,6 +14,6 @@
 
 std::string Cone::ToString() const {
     std::ostringstream out;
-    out << std::fixed << std::setprecision(2) << "[apex: " << apex << ", angle: " << spreadAngle << ", direction: " << direction <<  ", apex bound: " << apexBound<< "]";
+    out << std::fixed << std::setprecision(2) << "[apex: " << apex << ", angle: " << spreadAngle << ", direction: " << direction <<  ", apex distance: " << apexDistance << "]";
     return out.str();
 }

@@ -16,27 +16,26 @@
 
 #include <cutil_math.h>
 
+#define Min(lhs, rhs) (lhs) < (rhs) ? (lhs) : (rhs)
+#define Max(lhs, rhs) (lhs) > (rhs) ? (lhs) : (rhs)
+
 struct Cone {
     float3 apex;
     float spreadAngle;
     float3 direction;
-    float apexBound;
-    
-    // __host__ __device__ Cone() 
-    //     : apex(make_float3(0.0f, 0.0f, 0.0f)), spreadAngle(0.0f), 
-    //       direction(make_float3(1.0f, 0.0f, 0.0f)), apexBound(0.0f) {}
+    float apexDistance;
 
     /**
-     * Construct a cone from it's apex, direction, spreadangle and apex bound. The direction
+     * Construct a cone from it's apex, direction, spreadangle and distance to the apex. The direction
      * is assumed to be normalized.
      */
     __host__ __device__
-    static inline Cone MakeCone(const float3& apex, const float3& dir, const float spreadAngle, const float apexBound) {
+    static inline Cone MakeCone(const float3& apex, const float3& dir, const float spreadAngle, const float apexDistance) {
         Cone c;
         c.apex = apex;
         c.direction = dir;
         c.spreadAngle = spreadAngle;
-        c.apexBound = apexBound;
+        c.apexDistance = apexDistance;
         return c;
     }
 
@@ -65,7 +64,10 @@ struct Cone {
         c.apex = center - negOffset;
         
         //TODO determine bound
-        c.apexBound = 0.0f;
+        float3 closestPointToApex = make_float3(Min(cube.x.y, Max(cube.x.x, c.apex.x)),
+                                                Min(cube.y.y, Max(cube.y.x, c.apex.y)),
+                                                Min(cube.z.y, Max(cube.z.x, c.apex.z)));
+        c.apexDistance = length(closestPointToApex - c.apex);
 
         return c;
     }
@@ -78,6 +80,7 @@ struct Cone {
         
         return DoesIntersect(sphere, 1.0f / sinToAngle, cosToAngleSqr);
     }
+
     /**
      * http://www.geometrictools.com/Documentation/IntersectionSphereCone.pdf
      */
@@ -87,6 +90,8 @@ struct Cone {
         // @TODO Handle reflex cones by inversion or simply throw an exception in
         // the constructor when one is created? (I dont' need them for this project
         // anyway)
+
+        // TODO make sure sphere is further away than apex distance
     
         const float3 U = apex - direction * (sphere.radius * invSinToAngle);
         float3 D = sphere.center - U;
