@@ -65,13 +65,16 @@ template <class T>
 inline std::string Bitmap(T n){
     std::ostringstream out;
     out << "[";
-    for (unsigned int i = 0; i < sizeof(T) * 8; ++i){
+    int firstIndex = sizeof(T) * 8-1;
+    for (int i = firstIndex; i >= 0 ; --i){
+        if ((i % 4) == 3 && i != firstIndex) 
+            out << " ";
+
         if (n & (T)1<<i)
             out << 1;
         else
             out << "-";
 
-        if ((i % 4) == 3) out << " ";
     }
     out << "]";
     
