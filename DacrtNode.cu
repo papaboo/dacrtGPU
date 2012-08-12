@@ -375,7 +375,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
 
     // Calculate current ray owners. Is apparently faster with old
     // implementation instead of a workqueue.
-#if 1
+#if 0
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
     CalcOwners(rayPartitions, rayOwners);

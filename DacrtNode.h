@@ -11,7 +11,7 @@
 
 #include <thrust/device_vector.h>
 
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 class HyperCubes;
 class HyperRays;

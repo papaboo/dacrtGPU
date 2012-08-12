@@ -43,6 +43,7 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   SphereContainer.cu
   SphereGeometry.h
   SphereGeometry.cu
+  Utils/Utils.h
 )
 
 TARGET_LINK_LIBRARIES(${PROJ_NAME}

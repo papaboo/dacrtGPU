@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 
 #include <Meta/CUDA.h>
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 // One of these contain cutGetMaxGflopsDeviceId. No idea which (no internet)
 #include <cutil.h>

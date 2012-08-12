@@ -10,7 +10,7 @@
 #define _FOR_EACH_WITH_OWNERS_H_
 
 #include <Meta/CUDA.h>
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>

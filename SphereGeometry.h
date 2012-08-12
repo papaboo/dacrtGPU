@@ -12,7 +12,7 @@
 #include <AABB.h>
 #include <Material.h>
 #include <Sphere.h>
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>

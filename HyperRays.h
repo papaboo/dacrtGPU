@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_HYPER_RAYS_H_
 #define _GPU_DACRT_HYPER_RAYS_H_
 
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 #include <ostream>
 

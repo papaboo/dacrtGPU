@@ -9,8 +9,8 @@
 #ifndef _GPU_DACRT_SPHERE_CONTAINER_H_
 #define _GPU_DACRT_SPHERE_CONTAINER_H_
 
-#include <Utils.h>
 #include <Enums.h>
+#include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>
 

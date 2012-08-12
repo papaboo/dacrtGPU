@@ -14,7 +14,7 @@
 #include <HyperRays.h>
 #include <Meta/CUDA.h>
 #include <ToString.h>
-#include <Utils.h>
+#include <Utils/Utils.h>
 
 
 #include <ostream>

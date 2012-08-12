@@ -10,7 +10,6 @@
 #define _GPU_DACRT_HYPER_CUBE_H_
 
 #include <HyperRays.h>
-#include <Utils.h>
 
 #include <string>
 
