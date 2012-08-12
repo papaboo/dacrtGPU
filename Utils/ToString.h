@@ -61,4 +61,23 @@ inline std::ostream& operator<<(std::ostream& s, const thrust::device_vector<T>&
     return s;
 }
 
+template <class T>
+inline std::string Bitmap(T n){
+    std::ostringstream out;
+    out << "[";
+    for (unsigned int i = 0; i < sizeof(T) * 8 - 1; ++i){
+        if (n & (T)1<<i)
+            out << 1 << ", ";
+        else
+            out << 0 << ", ";
+    }
+    if (n & (T)1<<(sizeof(T) * 8 - 1))
+        out << 1 << "]";
+    else
+        out << 0 << "]";
+    
+    return out.str();
+}
+
+
 #endif

@@ -8,7 +8,7 @@
 
 #include <HyperRays.h>
 
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>

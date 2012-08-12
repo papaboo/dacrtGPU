@@ -8,7 +8,7 @@
 
 #include <Meta/CUDA.h>
 #include <RayContainer.h>
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/iterator/counting_iterator.h>

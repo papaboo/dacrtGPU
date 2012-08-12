@@ -9,7 +9,7 @@
 
 #include <iostream>
 
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 using namespace thrust::detail::backend::cuda;
 

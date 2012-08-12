@@ -18,7 +18,7 @@
 #include <Shading.h>
 #include <SphereContainer.h>
 #include <SphereGeometry.h>
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 #include <iostream>
 
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]){
 
     std::cout.setf(std::ios::unitbuf); // unbuffered std out
     cout << "Thrust v" << THRUST_MAJOR_VERSION << "." << THRUST_MINOR_VERSION << endl;
-        
+
     sqrtSamples = argc >= 2 ? atoi(argv[1]) : 1;
     samples = sqrtSamples * sqrtSamples; // # of samples
     int iterations = argc >= 3 ? atoi(argv[2]) : 1; // # iterations

@@ -14,7 +14,7 @@
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 struct Fragment {
     float4 emissionDepth; // [emission.xyz, depth]

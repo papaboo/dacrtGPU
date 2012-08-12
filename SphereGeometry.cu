@@ -10,7 +10,7 @@
 
 #include <Cone.h>
 #include <HyperCube.h>
-#include <ToString.h>
+#include <Utils/ToString.h>
 
 #include <iostream>
 #include <sstream>
