@@ -13,6 +13,13 @@ namespace Utils {
 
     class Morton {
     public:
+        
+        inline static unsigned int Encode(const unsigned int x, const unsigned int y, const unsigned int z, 
+                                          const unsigned int u, const unsigned int v) {
+            return (PartBy4(x) << 4) + (PartBy4(y) << 3) + (PartBy4(z) << 2) +
+                (PartBy4(u) << 1) + PartBy4(v);
+        }
+        
         /**
          * Insert a 0 bit after each of the 16 low bits of x
          *
