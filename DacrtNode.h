@@ -111,7 +111,8 @@ public:
      * TODO Partitions should be a begin and end iterator. Change it when I
      * implement a custom kernel instead of using thrust's for_each.
      */
-    static void CalcOwners(thrust::device_vector<uint2>& partitions,
+    static void CalcOwners(thrust::device_vector<uint2>::iterator beginPartition,
+                           thrust::device_vector<uint2>::iterator endPartition,
                            thrust::device_vector<unsigned int>& owners);
 
     std::string ToString() const;

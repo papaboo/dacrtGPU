@@ -103,7 +103,7 @@ void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator r
     // TODO Remove owners, at the least reduce by a partition start flag instead
     // e.g. |1|0|0|1|0|0|0|
     static thrust::device_vector<unsigned int> rayOwners(rayRange); rayOwners.resize(rayRange);
-    DacrtNodes::CalcOwners(rayPartitions, rayOwners);
+    DacrtNodes::CalcOwners(rayPartitions.begin(), rayPartitions.end(), rayOwners);
 
 #if REDUCE_ON_DEVICE
     // Reduce on the GPU

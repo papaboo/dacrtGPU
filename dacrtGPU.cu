@@ -18,6 +18,7 @@
 #include <Shading.h>
 #include <SphereContainer.h>
 #include <SphereGeometry.h>
+#include <Utils/Morton.h>
 #include <Utils/ToString.h>
 
 #include <iostream>
@@ -174,7 +175,7 @@ int main(int argc, char *argv[]){
 
     Meta::CUDA::Initialize();
 
-    std::cout.setf(std::ios::unitbuf); // unbuffered std out
+    cout.setf(std::ios::unitbuf); // unbuffered std out
     cout << "Thrust v" << THRUST_MAJOR_VERSION << "." << THRUST_MINOR_VERSION << endl;
 
     sqrtSamples = argc >= 2 ? atoi(argv[1]) : 1;

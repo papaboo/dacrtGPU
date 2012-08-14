@@ -378,7 +378,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
 #if 0
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
-    CalcOwners(rayPartitions, rayOwners);
+    CalcOwners(rayPartitions.begin(), rayPartitions.end(), rayOwners);
     thrust::zip_iterator<thrust::tuple<HyperRays::Iterator, UintIterator> > raysWithOwners
         = thrust::make_zip_iterator(thrust::make_tuple(rays.BeginInnerRays(), rayOwners.begin()));
 
@@ -422,7 +422,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // Calculate current sphere owners. TODO Use a work queue instead
     static thrust::device_vector<unsigned int> sphereOwners(spheres.CurrentSize());
     sphereOwners.resize(spheres.CurrentSize());
-    CalcOwners(spherePartitions, sphereOwners);
+    CalcOwners(spherePartitions.begin(), spherePartitions.end(), sphereOwners);
 
     // Calculate sphere partitions
     static thrust::device_vector<PartitionSide> spherePartitionSides(spheres.CurrentSize());
@@ -577,7 +577,7 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
 
     static thrust::device_vector<unsigned int> owners(rays.InnerSize());
     owners.resize(rays.InnerSize());
-    CalcOwners(rayPartitions, owners);
+    CalcOwners(rayPartitions.begin(), rayPartitions.end(), owners);
     
     const unsigned int oldRayLeafs = rays.LeafRays();
     rays.PartitionLeafs(isLeaf, rayLeafNodeIndices, rayPartitions, owners);
@@ -607,7 +607,7 @@ bool DacrtNodes::PartitionLeafs(RayContainer& rays, SphereContainer& spheres) {
                                      sphereLeafNodeIndices.begin()+1, MarkLeafSize(), plus);
 
     owners.resize(spheres.CurrentSize());
-    CalcOwners(spherePartitions, owners);
+    CalcOwners(spherePartitions.begin(), spherePartitions.end(), owners);
 
     const unsigned int oldSphereLeafs = spheres.DoneSize();
     spheres.PartitionLeafs(isLeaf, sphereLeafNodeIndices, spherePartitions, owners);
@@ -709,9 +709,9 @@ struct SetMarkers {
     unsigned int* owners;
     uint2* partitions;
     SetMarkers(thrust::device_vector<unsigned int>& owners,
-               thrust::device_vector<uint2>& partitions)
-        : owners(thrust::raw_pointer_cast(owners.data())),
-          partitions(thrust::raw_pointer_cast(partitions.data())) {}
+               thrust::device_vector<uint2>::iterator partitions)
+        : owners(RawPointer(owners)),
+          partitions(RawPointer(partitions)) {}
     
     __host__ __device__
     void operator()(const unsigned int threadId) const {
@@ -721,12 +721,13 @@ struct SetMarkers {
 };
 
 
-void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
+void DacrtNodes::CalcOwners(thrust::device_vector<uint2>::iterator beginPartition,
+                            thrust::device_vector<uint2>::iterator endPartition,
                             thrust::device_vector<unsigned int>& owners) {
-    size_t nodes = partitions.size();
     // std::cout << "owner nodes: " << nodes << std::endl;
     thrust::fill(owners.begin(), owners.end(), 0);
 
+    size_t nodes = endPartition - beginPartition;
     if (nodes == 1) return;
     
     // TODO Start the scan at first marker? The decision wether or not to do
@@ -734,7 +735,7 @@ void DacrtNodes::CalcOwners(thrust::device_vector<uint2>& partitions,
     /// owners.size() / nodes > X
     // for some sane X.
 
-    SetMarkers setMarkers(owners, partitions);
+    SetMarkers setMarkers(owners, beginPartition);
     thrust::counting_iterator<unsigned int> threadIds(0);
     thrust::for_each(threadIds, threadIds + nodes, setMarkers);
     // std::cout << "markers:\n" << owners << std::endl;
