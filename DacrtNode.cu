@@ -11,7 +11,7 @@
 #include <Cone.h>
 #include <ForEachWithOwners.h>
 #include <HyperCube.h>
-#include <HyperRays.h>
+#include <Rays.h>
 #include <RayContainer.h>
 #include <SphereGeometry.h>
 #include <SphereContainer.h>
@@ -108,11 +108,11 @@ struct RayPartitionSide {
         : splitAxis(thrust::raw_pointer_cast(axis.data())), 
           splitValues(thrust::raw_pointer_cast(values.data())) {}
 
-    RayPartitionSide(HyperRays::Iterator rays,
+    RayPartitionSide(Rays::Iterator rays,
                      thrust::device_vector<Axis>& axis, thrust::device_vector<float>& values,
                      thrust::device_vector<PartitionSide>& sides)
-        : rayOrigins(RawPointer(HyperRays::GetOrigins(rays))),
-          rayAxisUVs(RawPointer(HyperRays::GetAxisUVs(rays))),
+        : rayOrigins(RawPointer(Rays::GetOrigins(rays))),
+          rayAxisUVs(RawPointer(Rays::GetAxisUVs(rays))),
           splitAxis(RawPointer(axis)), 
           splitValues(RawPointer(values)),
           partitionSides(RawPointer(sides)) {}
@@ -379,7 +379,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     static thrust::device_vector<unsigned int> rayOwners(rayCount);
     rayOwners.resize(rayCount);
     CalcOwners(rayPartitions.begin(), rayPartitions.end(), rayOwners);
-    thrust::zip_iterator<thrust::tuple<HyperRays::Iterator, UintIterator> > raysWithOwners
+    thrust::zip_iterator<thrust::tuple<Rays::Iterator, UintIterator> > raysWithOwners
         = thrust::make_zip_iterator(thrust::make_tuple(rays.BeginInnerRays(), rayOwners.begin()));
 
     RayPartitionSide rayPartitionSide = RayPartitionSide(splitAxis, splitValues);
@@ -639,7 +639,7 @@ struct ExhaustiveIntersection {
 
     unsigned int *hitIDs;
     
-    ExhaustiveIntersection(HyperRays& rays, 
+    ExhaustiveIntersection(Rays& rays, 
                            thrust::device_vector<uint2>& sPartitions,
                            thrust::device_vector<unsigned int>& sIndices, 
                            thrust::device_vector<Sphere>& ss,
@@ -662,7 +662,7 @@ struct ExhaustiveIntersection {
     __host__ __device__
     void operator()(const unsigned int index, const unsigned int owner) const {
         const float3 origin = make_float3(rayOrigins[index]);
-        const float3 dir = normalize(HyperRay::AxisUVToDirection(make_float3(rayAxisUVs[index])));
+        const float3 dir = make_float3(rayAxisUVs[index]);
         
         const uint2 spherePartition = spherePartitions[owner];
         float hitT = 1e30f;
@@ -776,7 +776,7 @@ std::string DacrtNodes::ToString(RayContainer& rays, SphereContainer& spheres) c
             DacrtNode node = GetUnfinished(i);
             out << "\n" << i << ": " << node << "\n  Rays: ";
             for (unsigned int r = node.rayStart; r < node.rayEnd; ++r){
-                float4 origins = *(HyperRays::GetOrigins(rays.BeginInnerRays()) + r);
+                float4 origins = *(Rays::GetOrigins(rays.BeginInnerRays()) + r);
                 out << origins.w << ", ";
             }
             out << "\n  Spheres: ";
@@ -794,7 +794,7 @@ std::string DacrtNodes::ToString(RayContainer& rays, SphereContainer& spheres) c
             DacrtNode node = GetDone(i);
             out << "\n" << i << ": " << node << "\n  Rays: ";
             for (unsigned int r = node.rayStart; r < node.rayEnd; ++r){
-                float4 origins = *(HyperRays::GetOrigins(rays.BeginLeafRays()) + r);
+                float4 origins = *(Rays::GetOrigins(rays.BeginLeafRays()) + r);
                 out << origins.w << ", ";
             }
             out << "\n  Spheres: ";

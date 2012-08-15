@@ -28,8 +28,8 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   Fragment.h
   HyperCube.h
   HyperCube.cu
-  HyperRays.h
-  HyperRays.cu
+  Rays.h
+  Rays.cu
   Material.h
   Material.cu
   Meta/CUDA.h

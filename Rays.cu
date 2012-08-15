@@ -6,7 +6,7 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <HyperRays.h>
+#include <Rays.h>
 
 #include <Utils/ToString.h>
 
@@ -15,6 +15,13 @@
 
 #include <ostream>
 #include <iomanip>
+
+std::string Ray::ToString() const {
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(2) << "[id: " << id << ", origin: " << origin << ", dir: " << direction << ", t: " << t << "]";
+    return out.str();
+}
+
 
 std::string HyperRay::ToString() const {
     std::ostringstream out;
@@ -70,16 +77,16 @@ struct DeviceCreateRays {
         const float3 rayOrigin = camOrigin + 130.0f * rayDir;
 
         return thrust::tuple<float4, float4>(make_float4(rayOrigin, index),
-                                             make_float4(HyperRay::DirectionToAxisUV(rayDir), 0.0f));
+                                             make_float4(rayDir, 0.0f));
     }
 };
 
-HyperRays::HyperRays(const int width, const int height, const int sqrtSamples) {
+Rays::Rays(const int width, const int height, const int sqrtSamples) {
     // Random can be replaced by a random seed in a global var plus some
     // permutation of block and thread x's and y's.
     ///  -- or --
     // use http://http.developer.nvidia.com/GPUGems3/gpugems3_ch37.html
-
+    
     const int size = width * height * sqrtSamples * sqrtSamples;
     origins = thrust::device_vector<float4>(size);
     axisUVs = thrust::device_vector<float4>(size);
@@ -98,6 +105,8 @@ HyperRays::HyperRays(const int width, const int height, const int sqrtSamples) {
     DeviceCreateRays deviceCreateRays(width, height, sqrtSamples, cx, cy);
     thrust::transform(random.begin(), random.end(), thrust::counting_iterator<unsigned int>(0), 
                       Begin(), deviceCreateRays);
+
+    representation = RayRepresentation;
 
     /*    
     for (int y = 0; y < height; y++){
@@ -119,17 +128,75 @@ HyperRays::HyperRays(const int width, const int height, const int sqrtSamples) {
                     
                     float3 origin = camOrigin + rayDir * 130;
                     origins[index] = make_float4(origin.x, origin.y, origin.z, index);
-                    axisUVs[index] = make_float4(HyperRay::DirectionToAxisUV(rayDir), 0.0f);
+                    axisUVs[index] = make_float4(rayDir, 0.0f);
                 }
         }
     }
     */    
 }
 
-std::string HyperRays::ToString() const {
+struct RaysToHyperRays {
+    __host__ __device__
+    inline float4 operator()(const float4& direction) const {
+        const float3 axisUV = HyperRay::DirectionToAxisUV(make_float3(direction));
+        return make_float4(axisUV, direction.w);
+    }
+};
+
+struct HyperRaysToRays {
+    __host__ __device__
+    inline float4 operator()(const float4& axisUV) const {
+        const float3 dir = normalize(HyperRay::AxisUVToDirection(make_float3(axisUV)));
+        return make_float4(dir, axisUV.w);
+    }
+};
+
+void Rays::Convert(const Representation r) {
+    if (representation == r) return;
+
+    if (Size() > 0) {
+        // std::cout << "Convert from " << representation << " to " << r << std::endl;
+        switch(representation) {
+        case RayRepresentation: 
+            switch (r) {
+            case HyperRayRepresentation:
+                thrust::transform(axisUVs.begin(), axisUVs.end(), axisUVs.begin(), RaysToHyperRays());
+                break;
+            default:
+                std::cout << "No conversion from " << representation << " to " << r << std::endl;
+                return;
+            }
+            break;
+        case HyperRayRepresentation:
+            switch (r) {
+            case RayRepresentation:
+                thrust::transform(axisUVs.begin(), axisUVs.end(), axisUVs.begin(), HyperRaysToRays());
+                break;
+            default:
+                std::cout << "No conversion from " << representation << " to " << r << std::endl;
+                return;
+            }
+            break;
+        default:
+            std::cout << "Converting from " << representation << " not supported." << std::endl;
+            return;
+        }
+    }
+
+    // std::cout << "Converted from " << representation << " to " << r << std::endl;
+    
+    representation = r;
+}
+
+std::string Rays::ToString() const {
     std::ostringstream out;
     out << "HyperRays";
-    for (size_t i = 0; i < Size(); ++i)
-        out << "\n" << Get(i);
+    if (representation == RayRepresentation)
+        for (size_t i = 0; i < Size(); ++i)
+            out << "\n" << GetAsRay(i);
+    
+    else if (representation == HyperRayRepresentation)
+        for (size_t i = 0; i < Size(); ++i)
+            out << "\n" << GetAsHyperRay(i);
     return out.str();
 }

@@ -26,6 +26,12 @@ void RayContainer::Clear() {
     leafRays.Resize(0);
 }
 
+void RayContainer::Convert(const Rays::Representation r) {
+    innerRays.Convert(r);
+    nextRays.Convert(r);
+    leafRays.Convert(r);
+}
+
 template<int A>
 struct PartitionRaysByAxis {
     __host__ __device__
@@ -33,7 +39,7 @@ struct PartitionRaysByAxis {
         return thrust::get<1>(t).x < (float)A;
     }
     
-    static inline unsigned int Do(HyperRays& rays) {
+    static inline unsigned int Do(Rays& rays) {
         PartitionRaysByAxis<A> pred;
         return thrust::partition(rays.Begin(), rays.End(), pred) - rays.Begin();
     }
@@ -54,7 +60,7 @@ __constant__ unsigned int d_raysMovedLeft;
 struct PartitionLeft {
     float4 *nextOrigins, *nextAxisUVs;
 
-    PartitionLeft(HyperRays& nextRays,
+    PartitionLeft(Rays& nextRays,
                   thrust::device_vector<unsigned int>& leftIndices) 
         : nextOrigins(thrust::raw_pointer_cast(nextRays.origins.data())), 
           nextAxisUVs(thrust::raw_pointer_cast(nextRays.axisUVs.data())) {
@@ -81,7 +87,7 @@ void RayContainer::Partition(thrust::device_vector<PartitionSide>& partitionSide
     const size_t nextSize = leftIndices.size() - 1; // -1 since last element is the total number of rays moved left
     nextRays.Resize(nextSize);
 
-    thrust::zip_iterator<thrust::tuple<PartitionSideIterator, UintIterator, HyperRays::Iterator> > input
+    thrust::zip_iterator<thrust::tuple<PartitionSideIterator, UintIterator, Rays::Iterator> > input
         = thrust::make_zip_iterator(thrust::make_tuple(partitionSides.begin(), leftIndices.begin(),
                                                        innerRays.Begin()));
 
@@ -104,7 +110,7 @@ struct PartitionLeafsKernel {
     uint2* nodePartitions;
     unsigned int* nodeLeafIndices;
     
-    PartitionLeafsKernel(HyperRays& nextRays, HyperRays& leafRays,
+    PartitionLeafsKernel(Rays& nextRays, Rays& leafRays,
                          thrust::device_vector<bool>& lMarkers,
                          thrust::device_vector<uint2>& nPartitions,
                          thrust::device_vector<unsigned int>& nlIndices,
@@ -161,7 +167,7 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
     
     // TODO replace owners with work queue
 
-    thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator> > input =
+    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > input =
         thrust::make_zip_iterator(thrust::make_tuple(owners.begin(), BeginInnerRays()));
 
     PartitionLeafsKernel partitionLeafs(nextRays, leafRays, isLeaf, rayPartitions, leafNodeIndices, prevLeafIndiceAmount);
@@ -178,7 +184,7 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
     innerRays.Resize(LeafRays());
     
-    HyperRays::Iterator end = 
+    Rays::Iterator end = 
         thrust::remove_copy_if(leafRays.Begin(), leafRays.End(), terminated.begin(), 
                                innerRays.Begin(), thrust::logical_not<unsigned int>());
     
@@ -192,14 +198,24 @@ std::string RayContainer::ToString() const {
     std::ostringstream out;
     if (InnerSize() > 0) {
         out << "Inner rays (" << InnerSize() << "):";
-        for (size_t i = 0; i < InnerSize(); ++i)
-            out << "\n" << i << ": " << innerRays.Get(i);
+        for (size_t i = 0; i < InnerSize(); ++i) {
+            out << "\n" << i << ": ";
+            if (innerRays.GetRepresentation() == Rays::RayRepresentation)
+                out << innerRays.GetAsHyperRay(i) ;
+            else 
+                out << innerRays.GetAsRay(i);
+        }
         if (LeafRays() > 0) out << "\n";
     }
     if (LeafRays() > 0) {
         out << "Leaf rays (" << LeafRays() << "):";
-        for (size_t i = 0; i < LeafRays(); ++i)
-            out << "\n" << i << ": " << leafRays.Get(i);
+        for (size_t i = 0; i < LeafRays(); ++i) {
+            out << "\n" << i << ": ";
+            if (leafRays.GetRepresentation() == Rays::RayRepresentation) 
+                out << leafRays.GetAsHyperRay(i);
+            else 
+                out << leafRays.GetAsRay(i);
+        }
     }
     return out.str();
 }

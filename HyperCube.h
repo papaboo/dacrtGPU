@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_HYPER_CUBE_H_
 #define _GPU_DACRT_HYPER_CUBE_H_
 
-#include <HyperRays.h>
+#include <Rays.h>
 
 #include <string>
 
@@ -85,7 +85,7 @@ public:
           u(thrust::device_vector<float2>(size)),
           v(thrust::device_vector<float2>(size)) {}
     
-    void ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator rayEnd, 
+    void ReduceCubes(Rays::Iterator rayBegin, Rays::Iterator rayEnd, 
                      thrust::device_vector<uint2> rayPartitions,
                      const size_t cubes);
 

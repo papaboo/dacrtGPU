@@ -9,15 +9,15 @@
 #ifndef _GPU_DACRT_RAY_CONTAINER_H_
 #define _GPU_DACRT_RAY_CONTAINER_H_
 
-#include <HyperRays.h>
+#include <Rays.h>
 
 class RayContainer {
 public:
-    HyperRays innerRays;
+    Rays innerRays;
 private:
-    HyperRays nextRays;
+    Rays nextRays;
 public:
-    HyperRays leafRays;
+    Rays leafRays;
 
 public:
     RayContainer(const int width, const int height, const int sqrtSamples)
@@ -29,15 +29,18 @@ public:
 
     void Clear();
 
-    inline HyperRays::Iterator BeginInnerRays() { return innerRays.Begin(); }
-    inline HyperRays::Iterator EndInnerRays() { return innerRays.End(); }
+    inline Rays::Iterator BeginInnerRays() { return innerRays.Begin(); }
+    inline Rays::Iterator EndInnerRays() { return innerRays.End(); }
     inline unsigned int InnerSize() const { return innerRays.Size(); }
-    inline HyperRay GetInner(const unsigned int i) const { return innerRays.Get(i); }
 
-    inline HyperRays::Iterator BeginLeafRays() { return leafRays.Begin(); }
-    inline HyperRays::Iterator EndLeafRays() { return leafRays.End(); }
+    inline Rays::Iterator BeginLeafRays() { return leafRays.Begin(); }
+    inline Rays::Iterator EndLeafRays() { return leafRays.End(); }
     inline unsigned int LeafRays() const { return leafRays.Size(); }
-    inline HyperRay GetLeaf(const unsigned int i) const { return leafRays.Get(i); }
+
+    /**
+     * Converts the rays to a hyperray representation.
+     */
+    void Convert(const Rays::Representation r);
 
     /**
      * Partitions the rays according to their major axis. 

@@ -31,25 +31,25 @@
 using std::cout;
 using std::endl;
 
-//const int WIDTH = 8, HEIGHT = 8;
+//const int WIDTH = 2, HEIGHT = 2;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-//const int WIDTH = 128, HEIGHT = 128;
-const int WIDTH = 256, HEIGHT = 256;
-//const int WIDTH = 512, HEIGHT = 512;
+const int WIDTH = 128, HEIGHT = 128;
+//const int WIDTH = 256, HEIGHT = 256;
 int sqrtSamples;
 int samples;
 
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
-    // cout << rays.ToString() << endl;
 
     DacrtNodes nodes = DacrtNodes(1);
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
         cout << "Rays this pass: " << rays.InnerSize() << endl;
-        
+
+        rays.Convert(Rays::HyperRayRepresentation);
+
         // Partition rays according to their major axis
         uint rayPartitionStart[7];
         rays.PartitionByAxis(rayPartitionStart);
@@ -119,17 +119,16 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
             return;
         }
 
+        rays.Convert(Rays::RayRepresentation);
+
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
         nodes.ExhaustiveIntersect(rays, sphereIndices, hitIDs);
-
-        //cout << "hitIDs: " << hitIDs << endl;
 
         Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
                        sphereIndices.spheres, rayFrags);
 
         rays.RemoveTerminated(hitIDs);
 
-        // rays.Clear();
         ++bounce;
     }
 }

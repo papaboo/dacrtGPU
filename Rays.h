@@ -19,6 +19,24 @@
 
 #include <cutil_math.h>
 
+struct Ray {
+    float3 origin;
+    int id;
+    float3 direction;
+    float t;
+    
+    Ray(const float4& o_id, const float4& direction_t)
+        : origin(make_float3(o_id.x, o_id.y, o_id.z)), id(o_id.w),
+          direction(make_float3(direction_t)), t(direction_t.w) {}
+    
+    std::string ToString() const;
+};
+
+inline std::ostream& operator<<(std::ostream& s, const Ray& r){
+    return s << r.ToString();
+}
+
+
 struct HyperRay {
     float3 origin;
     int id;
@@ -93,8 +111,15 @@ inline std::ostream& operator<<(std::ostream& s, const HyperRay& r){
 
 
 
-class HyperRays {
+class Rays {
 public:
+    enum Representation {RayRepresentation, HyperRayRepresentation};
+
+private:
+    Representation representation;
+
+public:
+
     thrust::device_vector<float4> origins; // [x, y, z, id]
     thrust::device_vector<float4> axisUVs; // [axis, u, v, t]
     
@@ -109,14 +134,20 @@ public:
     static inline thrust::device_vector<float4>::iterator GetDirections(Iterator rays) { return GetAxisUVs(rays); }
         
 
-    HyperRays(const size_t size)
-        : origins(thrust::device_vector<float4>(size)),
-          axisUVs(thrust::device_vector<float4>(size)) {}
+    Rays(const size_t capacity)
+        : origins(thrust::device_vector<float4>(capacity)),
+          axisUVs(thrust::device_vector<float4>(capacity)) {}
 
     /**
      * Creates the rays.
      */
-    HyperRays(const int width, const int height, const int sqrtSamples);
+    Rays(const int width, const int height, const int sqrtSamples);
+
+    /**
+     * Converts the rays to a hyperray representation.
+     */
+    void Convert(const Representation r);
+    Representation GetRepresentation() const { return representation; }
 
     inline Iterator Begin() {
         return thrust::make_zip_iterator(thrust::make_tuple(origins.begin(), axisUVs.begin()));
@@ -130,12 +161,16 @@ public:
         origins.resize(size);
         axisUVs.resize(size);
     }
-    inline void Swap(HyperRays& rays) {
+    inline void Swap(Rays& rays) {
         origins.swap(rays.origins);
         axisUVs.swap(rays.axisUVs);
     }
 
-    inline HyperRay Get(const size_t i) const {
+    inline Ray GetAsRay(const size_t i) const {
+        return Ray(origins[i], axisUVs[i]);
+    }
+
+    inline HyperRay GetAsHyperRay(const size_t i) const {
         return HyperRay(origins[i], axisUVs[i]);
     }
 
@@ -143,7 +178,18 @@ public:
     
 };
 
-inline std::ostream& operator<<(std::ostream& s, const HyperRays& rs){
+inline std::ostream& operator<<(std::ostream& s, const Rays::Representation r){
+    switch(r) {
+    case Rays::RayRepresentation:
+        return s << "Representation::Ray";
+    case Rays::HyperRayRepresentation:
+        return s << "Representation::HyperRay";
+    }
+    
+    return s << "UNKNOWN";
+}
+
+inline std::ostream& operator<<(std::ostream& s, const Rays& rs){
     return s << rs.ToString();
 }
 

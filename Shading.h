@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_SHADING_H_
 #define _GPU_DACRT_SHADING_H_
 
-#include <HyperRays.h>
+#include <Rays.h>
 
 #include <thrust/device_vector.h>
 
@@ -19,12 +19,12 @@ class SpheresGeometry;
 class Shading {
 public:
 
-    static void Normals(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
+    static void Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
                         thrust::device_vector<unsigned int>::iterator hitIDs,
                         SpheresGeometry& spheres,
                         Fragments& frags);
 
-    static void Shade(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
+    static void Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
                       thrust::device_vector<unsigned int>::iterator hitIDs,
                       SpheresGeometry& spheres,
                       Fragments& frags);

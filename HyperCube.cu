@@ -9,7 +9,7 @@
 #include <HyperCube.h>
 
 #include <DacrtNode.h>
-#include <HyperRays.h>
+#include <Rays.h>
 #include <Meta/CUDA.h>
 #include <Utils/ToString.h>
 #include <Utils/Utils.h>
@@ -75,7 +75,7 @@ struct ReduceHyperCubes {
     }
 };
 
-void HyperCubes::ReduceCubes(HyperRays::Iterator rayBegin, HyperRays::Iterator rayEnd, 
+void HyperCubes::ReduceCubes(Rays::Iterator rayBegin, Rays::Iterator rayEnd, 
                              thrust::device_vector<uint2> rayPartitions,
                              const size_t cubes) {
 

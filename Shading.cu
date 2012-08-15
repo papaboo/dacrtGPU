@@ -53,9 +53,8 @@ struct ColorNormals {
         emissionDepth[id] = make_float4(norm * 0.5f + 0.5f, 1.0f);
 
         const float3 reflectionDir = dir - norm * 2 * dot(norm, dir);
-        const float3 reflectionAxisUV = HyperRay::DirectionToAxisUV(reflectionDir);
         thrust::tuple<float4, float4> newRay(make_float4(hitPos + norm * 0.02f, id), 
-                                             make_float4(reflectionAxisUV, 0.0f));
+                                             make_float4(reflectionDir, 0.0f));
 
         return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >(hitID == 7 ? 1 : 0,
                                                                            newRay);
@@ -68,13 +67,13 @@ struct ColorNormals {
  * After execution the hitIDs contains 0 for rays that bounced and 0 for
  * terminated rays.
  */
-void Shading::Normals(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
+void Shading::Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
                       thrust::device_vector<unsigned int>::iterator hitIDs,
                       SpheresGeometry& spheres, 
                       Fragments& frags) {
     
     size_t rayCount = raysEnd - raysBegin;
-    thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator> > hitRayBegin =
+    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > hitRayBegin =
         thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin));
 
     ColorNormals colorNormals(spheres, frags);
@@ -128,7 +127,7 @@ struct ShadeKernel {
         const unsigned int matID = matIDs[hitID];
         const float4 emission_reflection = emission_reflections[matID];
         // If bounces above max bounce then terminate. (If that is all we should
-        // do we can do that in a seperate kernel)
+        // do it can be done in a seperate kernel)
         if (emission_bounce.w >= 5) {
             emission_bounces[id] = emission_bounce + make_float4(oldF * make_float3(emission_reflection), 0);
             return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >
@@ -196,7 +195,7 @@ struct ShadeKernel {
         emission_bounces[id] = emission_bounce + make_float4(colorContribution * oldF * make_float3(emission_reflection), 1.0f);
         fs[id] = make_float4(oldF * make_float3(color_refraction), 0.0f);
         thrust::tuple<float4, float4> newRay(make_float4(hitPos + norm * 0.02f, id), 
-                                             make_float4(HyperRay::DirectionToAxisUV(dir), 0.0f));
+                                             make_float4(dir, 0.0f));
         
         return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >(1, newRay);
     }
@@ -208,10 +207,10 @@ inline float2 RandomFloat2() {
     return make_float2(x, y);
 }
 
-void Shading::Shade(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd, 
-                           thrust::device_vector<unsigned int>::iterator hitIDs,
-                           SpheresGeometry& spheres,
-                           Fragments& frags) {
+void Shading::Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
+                    thrust::device_vector<unsigned int>::iterator hitIDs,
+                    SpheresGeometry& spheres,
+                    Fragments& frags) {
 
     size_t rayCount = raysEnd - raysBegin;
 
@@ -222,10 +221,10 @@ void Shading::Shade(HyperRays::Iterator raysBegin, HyperRays::Iterator raysEnd,
     thrust::generate(host_random.begin(), host_random.end(), RandomFloat2);
     random = host_random;
     
-    thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator, Float2Iterator> > hitRayBegin =
+    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator, Float2Iterator> > hitRayBegin =
         thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin, random.begin()));
 
-    thrust::zip_iterator<thrust::tuple<UintIterator, HyperRays::Iterator> > hitRayRes =
+    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > hitRayRes =
         thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin));
 
     thrust::transform(hitRayBegin, hitRayBegin + rayCount,
