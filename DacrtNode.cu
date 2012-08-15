@@ -8,9 +8,9 @@
 
 #include <DacrtNode.h>
 
-#include <Cone.h>
 #include <ForEachWithOwners.h>
 #include <HyperCube.h>
+#include <Primitives/Cone.h>
 #include <Rays.h>
 #include <RayContainer.h>
 #include <SphereGeometry.h>

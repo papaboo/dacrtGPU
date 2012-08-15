@@ -11,7 +11,7 @@
 
 #include <AABB.h>
 #include <Material.h>
-#include <Sphere.h>
+#include <Primitives/Sphere.h>
 #include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>

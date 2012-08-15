@@ -9,7 +9,7 @@
 #include <Shading.h>
 
 #include <Fragment.h>
-#include <Sphere.h>
+#include <Primitives/Sphere.h>
 #include <SphereGeometry.h>
 
 #include <thrust/transform.h>

@@ -16,20 +16,6 @@
 #include <ostream>
 #include <iomanip>
 
-std::string Ray::ToString() const {
-    std::ostringstream out;
-    out << std::fixed << std::setprecision(2) << "[id: " << id << ", origin: " << origin << ", dir: " << direction << ", t: " << t << "]";
-    return out.str();
-}
-
-
-std::string HyperRay::ToString() const {
-    std::ostringstream out;
-    out << std::fixed << std::setprecision(2) << "[id: " << id << ", origin: " << origin << ", dir: " << normalize(Direction()) << ", axis: " << axis << ", u: " << UV.x << ", v: " << UV.y << "]";
-    return out.str();
-}
-
-
 
 inline float2 RandomFloat2() {
     float x = (float)rand() / (float)RAND_MAX;

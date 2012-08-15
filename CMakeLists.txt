@@ -20,8 +20,6 @@ SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}-arch=sm_12;")
 MESSAGE(STATUS "NVCC flags: ${CUDA_NVCC_FLAGS}")
 
 CUDA_ADD_EXECUTABLE(${PROJ_NAME}
-  Cone.h
-  Cone.cu
   DacrtNode.h
   DacrtNode.cu
   dacrtGPU.cu
@@ -34,11 +32,14 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   Material.cu
   Meta/CUDA.h
   Meta/CUDA.cu
+  Primitives/Cone.h
+  Primitives/HyperRay.h
+  Primitives/Ray.h
+  Primitives/Sphere.h
   RayContainer.h
   RayContainer.cu
   Shading.h
   Shading.cu
-  Sphere.h
   SphereContainer.h
   SphereContainer.cu
   SphereGeometry.h

@@ -10,9 +10,11 @@
 #define _GPU_DACRT_CONE_H_
 
 #include <HyperCube.h>
-#include <Sphere.h>
+#include <Primitives/Sphere.h>
 
 #include <string>
+#include <sstream>
+#include <iomanip>
 
 #include <cutil_math.h>
 
@@ -112,7 +114,11 @@ struct Cone {
         return false;
     }
 
-    std::string ToString() const;
+    inline std::string ToString() const {
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(2) << "[apex: " << apex << ", angle: " << spreadAngle << ", direction: " << direction <<  ", apex distance: " << apexDistance << "]";
+        return out.str();
+    }
 };
 
 inline std::ostream& operator<<(std::ostream& s, const Cone& c){
