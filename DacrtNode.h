@@ -9,12 +9,11 @@
 #ifndef _GPU_DACRT_NODE_H_
 #define _GPU_DACRT_NODE_H_
 
-#include <thrust/device_vector.h>
-
+#include <SphereContainer.h>
 #include <Utils/Utils.h>
 
-class HyperCubes;
-class HyperRays;
+#include <thrust/device_vector.h>
+
 class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
@@ -45,6 +44,9 @@ class DacrtNodes {
 private:
     thrust::device_vector<unsigned int> scan1;
     thrust::device_vector<unsigned int> scan2;
+    
+    RayContainer* rays;
+    SphereContainer* sphereIndices; // self initialized
 public:
     // TODO partition end always equal the next partitions start, so we can
     // reduce the uint2 to an uint, reducing memory overhead.
@@ -60,8 +62,15 @@ public:
 public:
 
     DacrtNodes(const size_t capacity);
-
+    ~DacrtNodes() {
+        if (sphereIndices) delete sphereIndices;
+    }
     void Reset();
+
+    void Construct(RayContainer& rays, SpheresGeometry& spheres);
+
+    inline RayContainer* GetRayContainer() { return rays; }
+    inline SphereContainer* GetSphereIndices() { return sphereIndices; }
 
     void Partition(RayContainer& rays, SphereContainer& spheres,
                    HyperCubes& initialCubes);

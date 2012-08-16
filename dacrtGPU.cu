@@ -31,7 +31,7 @@
 using std::cout;
 using std::endl;
 
-//const int WIDTH = 2, HEIGHT = 2;
+//const int WIDTH = 16, HEIGHT = 16;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
 const int WIDTH = 128, HEIGHT = 128;
@@ -48,84 +48,13 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
         
         cout << "Rays this pass: " << rays.InnerSize() << endl;
 
-        rays.Convert(Rays::HyperRayRepresentation);
-
-        // Partition rays according to their major axis
-        uint rayPartitionStart[7];
-        rays.PartitionByAxis(rayPartitionStart);
-        
-        cout << "ray partitions: ";
-        for (int p = 0; p < 7; ++p)
-            cout << rayPartitionStart[p] << ", ";
-        cout << endl;
-
-        thrust::device_vector<uint2> rayPartitions(6);
-        int activePartitions = 0;
-        for (int a = 0; a < 6; ++a) {
-            const size_t rayCount = rayPartitionStart[a+1] - rayPartitionStart[a];
-            rayPartitions[a] = make_uint2(rayPartitionStart[a], rayPartitionStart[a+1]);
-            activePartitions += rayCount > 0 ? 1 : 0;
-        }
-
-        // Reduce the cube bounds
-        HyperCubes cubes = HyperCubes(128);
-        cubes.ReduceCubes(rays.BeginInnerRays(), rays.EndInnerRays(), 
-                          rayPartitions, activePartitions);
-        cout << cubes << endl;
-
-        uint spherePartitionStart[activePartitions+1];
-        SphereContainer sphereIndices(cubes, spheres, spherePartitionStart);
-
-        cout << "sphere partitions: ";
-        for (int p = 0; p < activePartitions+1; ++p)
-            cout << spherePartitionStart[p] << ", ";
-        cout << endl;
-
-        nodes.Reset();
-        int nodeIndex = 0;
-        for (int a = 0; a < 6; ++a) {
-            const int rayStart = rayPartitionStart[a];
-            const size_t rayEnd = rayPartitionStart[a+1];
-            if (rayStart == rayEnd) continue;
-
-            const int sphereStart = spherePartitionStart[nodeIndex];
-            const size_t sphereEnd = spherePartitionStart[nodeIndex+1];
-            nodes.SetUnfinished(nodeIndex, DacrtNode(rayStart, rayEnd, sphereStart, sphereEnd));
-            ++nodeIndex;
-        }
-
-        unsigned int i = 0;
-        while (nodes.UnfinishedNodes() > 0) {
-            //cout << "\n *** PARTITION NODES (" << bounce<< ", " << i << ") ***\n" << nodes/*.ToString(rays, sphereIndices)*/ << "\n ***\n" << endl;
-            nodes.Partition(rays, sphereIndices, cubes);
-            //cout << "\n *** PARTITION LEAFS (" << bounce<< ", " << i << ") ***\n" << nodes/*.ToString(rays, sphereIndices)*/ << "\n ***\n" << endl;
-            if (nodes.PartitionLeafs(rays, sphereIndices))
-                ;//cout << "\n *** AFTER PARTITIONING (" << bounce<< ", " << i << ") ***\n" << nodes/*.ToString(rays, sphereIndices)*/ << "\n ***\n" << endl;
-            else
-                ;//cout << "\n *** NO LEAFS CREATED (" << bounce<< ", " << i << ") ***\n" << endl;
-            
-            if (nodes.UnfinishedNodes() > 0) {
-                // Prepare cubes for next round.
-                cubes.ReduceCubes(rays.BeginInnerRays(), rays.EndInnerRays(), 
-                                  nodes.rayPartitions, nodes.UnfinishedNodes());
-                // cout << cubes << endl;
-            }
-
-            ++i;
-        }
-
-        if (rays.LeafRays() == 0) {
-            cout << "No leafs to shade. What went wrong?" << endl;
-            return;
-        }
-
-        rays.Convert(Rays::RayRepresentation);
+        nodes.Construct(rays, spheres);
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
-        nodes.ExhaustiveIntersect(rays, sphereIndices, hitIDs);
+        nodes.ExhaustiveIntersect(rays, *(nodes.GetSphereIndices()), hitIDs);
 
         Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
-                       sphereIndices.spheres, rayFrags);
+                       nodes.GetSphereIndices()->spheres, rayFrags);
 
         rays.RemoveTerminated(hitIDs);
 

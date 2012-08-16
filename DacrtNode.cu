@@ -37,6 +37,7 @@ std::string DacrtNode::ToString() const {
 
 DacrtNodes::DacrtNodes(const size_t capacity) 
     : scan1(capacity+1), scan2(capacity+1), 
+      rays(NULL), sphereIndices(NULL), 
       rayPartitions(capacity), spherePartitions(capacity),
       nextRayPartitions(capacity), nextSpherePartitions(capacity),
       doneRayPartitions(capacity), doneSpherePartitions(capacity) {
@@ -53,6 +54,81 @@ void DacrtNodes::Reset() {
     nextSpherePartitions.resize(0);
     doneRayPartitions.resize(0);
     doneSpherePartitions.resize(0);
+}
+
+void DacrtNodes::Construct(RayContainer& rs, SpheresGeometry& spheres) {
+    this->rays = &rs;
+    
+    rs.Convert(Rays::HyperRayRepresentation);
+    
+    // Partition rays according to their major axis
+    uint rayPartitionStart[7];
+    rs.PartitionByAxis(rayPartitionStart);
+    
+    std::cout << "ray partitions: ";
+    for (int p = 0; p < 7; ++p)
+        std::cout << rayPartitionStart[p] << ", ";
+    std::cout << std::endl;
+    
+    static thrust::device_vector<uint2> initialRayPartitions(6);
+    int activePartitions = 0;
+    for (int a = 0; a < 6; ++a) {
+        const size_t rayCount = rayPartitionStart[a+1] - rayPartitionStart[a];
+        initialRayPartitions[a] = make_uint2(rayPartitionStart[a], rayPartitionStart[a+1]);
+        activePartitions += rayCount > 0 ? 1 : 0;
+    }
+    
+    // Reduce the cube bounds
+    HyperCubes cubes = HyperCubes(128);
+    cubes.ReduceCubes(rs.BeginInnerRays(), rs.EndInnerRays(), 
+                      initialRayPartitions, activePartitions);
+    std::cout << cubes << std::endl;
+    
+    uint spherePartitionStart[activePartitions+1];
+    if (sphereIndices) delete sphereIndices; // TODO reuse allocated sphere indices instead of detroying
+    sphereIndices = new SphereContainer(cubes, spheres, spherePartitionStart);
+    
+    std::cout << "sphere partitions: ";
+    for (int p = 0; p < activePartitions+1; ++p)
+        std::cout << spherePartitionStart[p] << ", ";
+    std::cout << std::endl;
+    
+    Reset();
+    int nodeIndex = 0;
+    for (int a = 0; a < 6; ++a) {
+        const int rayStart = rayPartitionStart[a];
+        const size_t rayEnd = rayPartitionStart[a+1];
+        if (rayStart == rayEnd) continue;
+        
+        const int sphereStart = spherePartitionStart[nodeIndex];
+        const size_t sphereEnd = spherePartitionStart[nodeIndex+1];
+        SetUnfinished(nodeIndex, DacrtNode(rayStart, rayEnd, sphereStart, sphereEnd));
+        ++nodeIndex;
+    }
+
+    unsigned int i = 0;
+    while (UnfinishedNodes() > 0) {
+        // std::cout << "\n *** PARTITION NODES (" << i << ") ***\n" << ToString(rs, *sphereIndices) << "\n ***\n" << std::endl;
+        Partition(rs, *sphereIndices, cubes);
+        // std::cout << "\n *** PARTITION LEAFS (" << i << ") ***\n" << ToString(rs, *sphereIndices) << "\n ***\n" << std::endl;
+        if (PartitionLeafs(rs, *sphereIndices))
+            ;//cout << "\n *** AFTER PARTITIONING (" << i << ") ***\n" << nodes/*.ToString(rs, sphereIndices)*/ << "\n ***\n" << endl;
+        else
+            ;//cout << "\n *** NO LEAFS CREATED (" << i << ") ***\n" << endl;
+        
+        if (UnfinishedNodes() > 0) {
+            // Prepare cubes for next round.
+            cubes.ReduceCubes(rs.BeginInnerRays(), rs.EndInnerRays(), 
+                              rayPartitions, UnfinishedNodes());
+            // std::cout << "cubes after reduction:\n" << cubes << std::endl;
+        }
+        
+        ++i;
+        
+        // if (i == 2) exit(0);
+    }
+    
+    rs.Convert(Rays::RayRepresentation);
 }
 
 struct CalcSplitInfo {
@@ -367,7 +443,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
         = thrust::make_zip_iterator(thrust::make_tuple(splitAxis.begin(), splitValues.begin()));
 
     CalcSplitInfo calcSplitInfo;    
-    thrust::transform(cubes.BeginBounds(), cubes.EndBounds(), axisInfo, calcSplitInfo);    
+    thrust::transform(cubes.BeginBounds(), cubes.EndBounds(), axisInfo, calcSplitInfo);
 
     // Calculate the partition side
     static thrust::device_vector<PartitionSide> rayPartitionSides(rayCount);
