@@ -29,6 +29,7 @@ struct HyperRay {
         : origin(make_float3(o.x, o.y, o.z)), id(o.w),
           axis((SignedAxis)aUV.x), UV(make_float2(aUV.y, aUV.z)), t(aUV.w) {}
 
+    __host__ __device__ 
     inline float3 Direction() const { return AxisUVToDirection(make_float3(axis, UV.x, UV.y)); }
 
     __host__ __device__ 
