@@ -12,11 +12,11 @@
 #include <HyperCube.h>
 #include <Primitives/Sphere.h>
 
+#include <cutil_math.h>
+
 #include <string>
 #include <sstream>
 #include <iomanip>
-
-#include <cutil_math.h>
 
 #define Min(lhs, rhs) (lhs) < (rhs) ? (lhs) : (rhs)
 #define Max(lhs, rhs) (lhs) > (rhs) ? (lhs) : (rhs)
@@ -28,8 +28,8 @@ struct Cone {
     float apexDistance;
 
     /**
-     * Construct a cone from it's apex, direction, spreadangle and distance to the apex. The direction
-     * is assumed to be normalized.
+     * Construct a cone from it's apex, direction, spreadangle and distance to
+     * the apex. The direction is assumed to be normalized.
      */
     __host__ __device__
     static inline Cone MakeCone(const float3& apex, const float3& dir, const float spreadAngle, const float apexDistance) {
@@ -65,7 +65,6 @@ struct Cone {
         float3 negOffset = c.direction * length(r0 - r1) / (2.0f * sin(c.spreadAngle));
         c.apex = center - negOffset;
         
-        //TODO determine bound
         float3 closestPointToApex = make_float3(Min(cube.x.y, Max(cube.x.x, c.apex.x)),
                                                 Min(cube.y.y, Max(cube.y.x, c.apex.y)),
                                                 Min(cube.z.y, Max(cube.z.x, c.apex.z)));
@@ -94,6 +93,7 @@ struct Cone {
         // anyway)
 
         // TODO make sure sphere is further away than apex distance
+        if (length(sphere.center - apex) < (apexDistance - sphere.radius)) return false;
     
         const float3 U = apex - direction * (sphere.radius * invSinToAngle);
         float3 D = sphere.center - U;
