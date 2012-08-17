@@ -47,6 +47,10 @@ DacrtNodes::DacrtNodes(const size_t capacity)
     doneRayPartitions.resize(0); doneSpherePartitions.resize(0);
 }
 
+DacrtNodes::~DacrtNodes() {
+    if (sphereIndices) delete sphereIndices;
+}
+
 void DacrtNodes::Reset() {
     rayPartitions.resize(0);
     nextRayPartitions.resize(0);

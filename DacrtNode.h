@@ -9,11 +9,11 @@
 #ifndef _GPU_DACRT_NODE_H_
 #define _GPU_DACRT_NODE_H_
 
-#include <SphereContainer.h>
-#include <Utils/Utils.h>
+// #include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>
 
+class HyperCubes;
 class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
@@ -62,9 +62,8 @@ public:
 public:
 
     DacrtNodes(const size_t capacity);
-    ~DacrtNodes() {
-        if (sphereIndices) delete sphereIndices;
-    }
+    ~DacrtNodes();
+
     void Reset();
 
     void Construct(RayContainer& rays, SpheresGeometry& spheres);
