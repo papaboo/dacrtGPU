@@ -11,7 +11,6 @@
 
 #include <sstream>
 
-#include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
 
 #include <Utils/ToString.h>
@@ -32,6 +31,8 @@ struct Fragment {
         return out.str();
     }
 };
+
+typedef thrust::device_vector<float4>::iterator Float4Iterator;
 
 class Fragments {
 public:
