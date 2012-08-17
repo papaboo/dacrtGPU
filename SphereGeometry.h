@@ -9,8 +9,8 @@
 #ifndef _GPU_DACRT_SPHERE_GEOMETRY_H_
 #define _GPU_DACRT_SPHERE_GEOMETRY_H_
 
-#include <AABB.h>
 #include <Material.h>
+#include <Primitives/AABB.h>
 #include <Primitives/Sphere.h>
 #include <Utils/Utils.h>
 
