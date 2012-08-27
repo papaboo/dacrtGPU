@@ -17,6 +17,7 @@
 
 namespace Meta {
 
+bool CUDA::initialized = false;
 cudaDeviceProp CUDA::activeCudaDevice;
 
 void CUDA::Initialize() {
@@ -39,7 +40,7 @@ void CUDA::Initialize() {
     cudaGetDeviceProperties(&activeCudaDevice, device);
     CHECK_FOR_CUDA_ERROR();
     std::cout << "CUDA: version " << version/1000 << "." << version % 100 << ", using device " << std::string(activeCudaDevice.name) << std::endl;
-   
+    initialized = true;
 }
 
 }

@@ -43,6 +43,7 @@ namespace Meta {
 
 class CUDA {
 public:
+    static bool initialized;
     static cudaDeviceProp activeCudaDevice;
     
     static void Initialize();
