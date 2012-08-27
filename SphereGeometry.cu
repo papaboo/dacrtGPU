@@ -8,8 +8,8 @@
 
 #include <SphereGeometry.h>
 
-#include <HyperCube.h>
 #include <Primitives/Cone.h>
+#include <Primitives/HyperCube.h>
 #include <Utils/ToString.h>
 
 #include <iostream>

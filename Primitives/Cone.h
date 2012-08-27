@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_CONE_H_
 #define _GPU_DACRT_CONE_H_
 
-#include <HyperCube.h>
+#include <Primitives/HyperCube.h>
 #include <Primitives/Sphere.h>
 
 #include <cutil_math.h>

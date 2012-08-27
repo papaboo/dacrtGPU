@@ -8,8 +8,8 @@
 
 #include <SphereContainer.h>
 
-#include <HyperCube.h>
 #include <Primitives/Cone.h>
+#include <Primitives/HyperCube.h>
 #include <SphereGeometry.h>
 
 #include <algorithm>

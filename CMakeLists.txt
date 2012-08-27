@@ -24,15 +24,17 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   DacrtNode.cu
   dacrtGPU.cu
   Fragment.h
-  HyperCube.h
-  HyperCube.cu
   Rays.h
   Rays.cu
   Material.h
   Material.cu
   Meta/CUDA.h
   Meta/CUDA.cu
+  MortonDacrtNode.h
+  MortonDacrtNode.cu
   Primitives/Cone.h
+  Primitives/HyperCube.h
+  Primitives/HyperCube.cu
   Primitives/HyperRay.h
   Primitives/Ray.h
   Primitives/Sphere.h

@@ -6,7 +6,7 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <HyperCube.h>
+#include <Primitives/HyperCube.h>
 
 #include <DacrtNode.h>
 #include <Rays.h>

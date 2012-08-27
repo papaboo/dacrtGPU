@@ -9,8 +9,8 @@
 #include <DacrtNode.h>
 
 #include <ForEachWithOwners.h>
-#include <HyperCube.h>
 #include <Primitives/Cone.h>
+#include <Primitives/HyperCube.h>
 #include <Rays.h>
 #include <RayContainer.h>
 #include <SphereGeometry.h>
@@ -60,7 +60,7 @@ void DacrtNodes::Reset() {
     doneSpherePartitions.resize(0);
 }
 
-void DacrtNodes::Construct(RayContainer& rs, SpheresGeometry& spheres) {
+void DacrtNodes::Create(RayContainer& rs, SpheresGeometry& spheres) {
     this->rays = &rs;
     
     rs.Convert(Rays::HyperRayRepresentation);

@@ -9,9 +9,10 @@
 #ifndef _GPU_DACRT_NODE_H_
 #define _GPU_DACRT_NODE_H_
 
-// #include <Utils/Utils.h>
-
 #include <thrust/device_vector.h>
+
+#include <string>
+#include <ostream>
 
 class HyperCubes;
 class RayContainer;
@@ -66,7 +67,7 @@ public:
 
     void Reset();
 
-    void Construct(RayContainer& rays, SpheresGeometry& spheres);
+    void Create(RayContainer& rays, SpheresGeometry& spheres);
 
     inline RayContainer* GetRayContainer() { return rays; }
     inline SphereContainer* GetSphereIndices() { return sphereIndices; }
