@@ -42,8 +42,8 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
                 localPoolNextOwner = d_globalPoolNextOwner;
                 
                 // TODO Paralize the fetch loop over shared data in parallel,
-                // then let the 'winner' write it's id in a res var. \o/
-                // (clover boy)
+                // then let the 'winner' write it's id in a shared res var. \o/
+                // (clever boy)
                 uint2 partition = partitions[localPoolNextOwner];
                 while (localPoolNextIndex >= partition.y)
                     partition = partitions[++localPoolNextOwner];
@@ -59,6 +59,7 @@ void ForeachWithOwnerKernel(const uint2* partitions, const unsigned int partitio
         if (USE_GLOBAL_OWNER) localOwner = localPoolNextOwner;
 
         // Manual freaking loop unrolling. Thanks nvcc
+
         uint2 partition = partitions[localOwner];
         while (localIndex >= partition.y)
             partition = partitions[++localOwner];
