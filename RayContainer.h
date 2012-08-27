@@ -63,6 +63,9 @@ public:
                         thrust::device_vector<uint2>& rayPartitions,
                         thrust::device_vector<unsigned int>& owners);
 
+    void SortToLeaves(thrust::device_vector<unsigned int>::iterator keysBegin,
+                      thrust::device_vector<unsigned int>::iterator keysEnd);
+    
     void RemoveTerminated(thrust::device_vector<unsigned int>& termianted);
 
     std::string ToString() const;

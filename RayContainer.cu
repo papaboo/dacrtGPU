@@ -180,6 +180,14 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
     // std::cout << ToString() << std::endl;
 }
 
+void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator keysBegin,
+                                thrust::device_vector<unsigned int>::iterator keysEnd) {
+
+    thrust::sort_by_key(keysBegin, keysEnd, BeginInnerRays());
+
+    // TODO This will be a lot faster once leafs are just the first 'n' rays in innerRays.
+    leafRays = innerRays;
+}
 
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
     innerRays.Resize(LeafRays());
