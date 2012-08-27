@@ -44,8 +44,11 @@ struct HyperRay {
     }
 
     __host__ __device__
+    inline static float3 AxisUVFromDirection(const float3 dir) { return DirectionToAxisUV(dir); }
+    
+    __host__ __device__
     inline static float3 DirectionToAxisUV(const float3 dir) {
-
+        // TODO encode axis as bitmask in x instead of converting from integer to float.
         float3 absDir = make_float3(fabs(dir.x), fabs(dir.y), fabs(dir.z));
         if (absDir.x > absDir.y && absDir.x > absDir.z) { // x is dominant
             return make_float3(dir.x > 0.0f ? PosX : NegX,
