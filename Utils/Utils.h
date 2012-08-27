@@ -52,17 +52,10 @@ template <class T>
 inline T* RawPointer(thrust::device_vector<T>& v) {
     return thrust::raw_pointer_cast(v.data());
 }
-// template <class T>
-// inline T* Raw_pointer(typename thrust::device_vector<T>::iterator v) {
-//     return thrust::raw_pointer_cast(&*v);
-// }
-inline uint2* RawPointer(typename thrust::device_vector<uint2>::iterator v) {
+template <class T>
+inline T* RawPointer(typename thrust::detail::normal_iterator<thrust::device_ptr<T> > v) {
     return thrust::raw_pointer_cast(&*v);
 }
-inline float4* RawPointer(typename thrust::device_vector<float4>::iterator v) {
-    return thrust::raw_pointer_cast(&*v);
-}
-
 
 inline int ToByte(float v) {
     return int(pow(Clamp01(v),1/2.2f)*255.0f+.5f);
