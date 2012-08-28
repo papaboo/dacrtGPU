@@ -19,6 +19,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include <thrust/remove.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
@@ -49,6 +50,7 @@ struct MortonCode {
 
     __host__ __device__ inline MortonCode& operator=(const unsigned int rhs) { code = rhs; return *this; }
     __host__ __device__ inline void operator+=(const MortonCode rhs) { code += rhs; }
+    __host__ __device__ inline MortonCode operator&(const unsigned int rhs) { return MortonCode(code & rhs); }
     __host__ __device__ inline operator unsigned int() const { return code; }
     
     __host__ __device__ inline MortonCode WithoutAxis() const { return MortonCode(code & 0x1FFFFFFF); }
@@ -193,6 +195,13 @@ void ReduceMinMaxMortonByAxis(thrust::device_vector<unsigned int>::iterator mort
                               thrust::device_vector<MortonBound>::iterator boundsBegin,
                               thrust::device_vector<MortonBound>::iterator boundsEnd);
 
+struct InvalidAxis {
+    __host__ __device__
+    inline bool operator()(const MortonBound b) const {
+        return (b.min & 0xE0000000) >= 0xC0000000;
+    }
+};
+
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
     
     // TestMortonEncoding();
@@ -217,13 +226,15 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     ReduceMinMaxMortonByAxis(rayMortonCodes.begin(), rayMortonCodes.end(),
                              bounds.begin(), bounds.end());
 
-    MortonBound zNegBound = bounds[5];
-    std::cout << "HyperCube: " << rayMortonCoder.HyperCubeFromBound(zNegBound) << std::endl;
+    // Cull inactive partitions.
+    thrust::device_vector<MortonBound>::iterator boundsEnd = thrust::remove_if(bounds.begin(), bounds.end(), InvalidAxis());
+    bounds.resize(boundsEnd - bounds.begin());
+    std::cout << "Bounds:\n" << bounds << std::endl;
     
+    MortonBound firstBound = bounds[0];
+    std::cout << "HyperCube: " << rayMortonCoder.HyperCubeFromBound(firstBound) << std::endl;
 
     exit(0);
-
-    // Cull inactive (size 0) partitions.
 
     /*    
     // Geometry partition
@@ -415,27 +426,19 @@ void ReduceMinMaxMortonByAxis(thrust::device_vector<unsigned int>::iterator mort
                                                         RawPointer(intermediateBounds),
                                                         thrust::raw_pointer_cast(&*boundsBegin), boundsSize);
 
-    std::cout << "intermediateBounds\n" << intermediateBounds << std::endl;
+    // std::cout << "intermediateBounds\n" << intermediateBounds << std::endl;
     
-    std::cout << "bounds:\n";
-    for (int i = 0; i < boundsSize; ++i) {
-        std::cout << i << ": " << boundsBegin[i];
-        if (i < boundsSize-1)
-            std::cout << "\n";
-    }
-    std::cout << std::endl;
+    // std::cout << "bounds:\n";
+    // for (int i = 0; i < boundsSize; ++i) {
+    //     std::cout << i << ": " << boundsBegin[i];
+    //     if (i < boundsSize-1)
+    //         std::cout << "\n";
+    // }
+    // std::cout << std::endl;
     
     ReduceMinMaxMortonByAxisPass2<<<1, 128>>>(RawPointer(intermediateBounds), intermediateBounds.size(),
                                               thrust::raw_pointer_cast(&*boundsBegin), boundsSize);
 
-    std::cout << "bounds:\n";
-    for (int i = 0; i < boundsSize; ++i) {
-        std::cout << i << ": " << boundsBegin[i];
-        if (i < boundsSize-1)
-            std::cout << "\n";
-    }
-    std::cout << std::endl;
-    
 }
 
 void TestMortonEncoding() {
