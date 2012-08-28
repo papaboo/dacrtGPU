@@ -8,6 +8,7 @@
 
 #include <SphereContainer.h>
 
+#include <HyperCubes.h>
 #include <Primitives/Cone.h>
 #include <Primitives/HyperCube.h>
 #include <SphereGeometry.h>
@@ -17,6 +18,16 @@
 
 #include <thrust/for_each.h>
 #include <thrust/copy.h>
+
+
+SphereContainer::SphereContainer(SpheresGeometry& spheres, thrust::device_vector<unsigned int>& indices)
+    : spheres(spheres), 
+      indices1(indices), indices2(indices.capacity()), 
+      currentIndices(indices1), nextIndices(indices2),
+      doneIndices(indices.capacity()) {
+    nextIndices.resize(0);
+    doneIndices.resize(0);
+}
 
 struct CreateCones {
     __host__ __device__

@@ -30,6 +30,7 @@ public:
     thrust::device_vector<unsigned int> doneIndices;
 
 public:
+    SphereContainer(SpheresGeometry& spheres, thrust::device_vector<unsigned int>& indices);
     SphereContainer(HyperCubes& cubes, SpheresGeometry& spheres,
                     unsigned int* spherePartitionStart);
 
