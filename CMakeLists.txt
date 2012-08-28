@@ -24,6 +24,8 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   DacrtNode.cu
   dacrtGPU.cu
   Fragment.h
+  HyperCubes.h
+  HyperCubes.cu
   Kernels/ReduceMinMaxMortonCode.h
   Kernels/ReduceMinMaxMortonCode.cu
   Material.h
@@ -34,7 +36,6 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   MortonDacrtNode.cu
   Primitives/Cone.h
   Primitives/HyperCube.h
-  Primitives/HyperCube.cu
   Primitives/HyperRay.h
   Primitives/MortonCode.h
   Primitives/Ray.h

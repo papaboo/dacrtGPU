@@ -8,11 +8,13 @@
 
 #include <MortonDacrtNode.h>
 
+#include <HyperCubes.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <Primitives/AABB.h>
 #include <Primitives/HyperCube.h>
 #include <Primitives/MortonCode.h>
 #include <RayContainer.h>
+#include <SphereContainer.h>
 #include <SphereGeometry.h>
 #include <Utils/ToString.h>
 
@@ -156,6 +158,10 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     std::cout << "HyperCube: " << rayMortonCoder.HyperCubeFromBound(firstBound) << std::endl;
 
     exit(0);
+
+    
+    // sphereIndices = new SphereContainer(spheres, bounds.size() * spheres.Size());
+    
 
     /*    
     // Geometry partition

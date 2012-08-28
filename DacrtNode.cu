@@ -9,6 +9,7 @@
 #include <DacrtNode.h>
 
 #include <ForEachWithOwners.h>
+#include <HyperCubes.h>
 #include <Primitives/Cone.h>
 #include <Primitives/HyperCube.h>
 #include <Rays.h>

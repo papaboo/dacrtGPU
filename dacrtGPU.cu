@@ -32,10 +32,10 @@ using std::cout;
 using std::endl;
 
 //const int WIDTH = 8, HEIGHT = 8;
-//const int WIDTH = 16, HEIGHT = 16;
+const int WIDTH = 16, HEIGHT = 16;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-const int WIDTH = 128, HEIGHT = 128;
+//const int WIDTH = 128, HEIGHT = 128;
 //const int WIDTH = 256, HEIGHT = 256;
 int sqrtSamples;
 int samples;
@@ -43,9 +43,9 @@ int samples;
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
-    // MortonDacrtNodes mNodes = MortonDacrtNodes(1);
-    // mNodes.Create(rays, spheres);
-    // exit(0);
+    MortonDacrtNodes mNodes = MortonDacrtNodes(1);
+    mNodes.Create(rays, spheres);
+    exit(0);
     
     DacrtNodes nodes = DacrtNodes(1);
     unsigned int bounce = 0;
