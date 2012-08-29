@@ -44,7 +44,7 @@ namespace Kernels {
             min[index] = rhsMin;
             max[index] = rhsMax;
         
-            const unsigned int globalIndex = MortonCode::AxisFromCode(lhsMin);
+            const unsigned int globalIndex = lhsMin.GetAxis();
             const MortonBound old = bounds[globalIndex];
             const unsigned int min = Morton::MinBy4(lhsMin.WithoutAxis(), old.min.WithoutAxis()) + axis;
             const unsigned int max = Morton::MaxBy4(lhsMax.WithoutAxis(), old.max.WithoutAxis()) + axis;
@@ -168,10 +168,10 @@ namespace Kernels {
             sharedMin[768 + i + threadIdx.x] = mins[i + threadIdx.x];
     
         // Reduce the last value, comparing it to what is already stored in bounds
-        const unsigned int lhsMin = mins[0];
-        const unsigned int lhsMax = maxs[0];
-        const unsigned int axis = lhsMin & 0xE0000000;
-        const unsigned int globalIndex = MortonCode::AxisFromCode(lhsMin);
+        const MortonCode lhsMin = mins[0];
+        const MortonCode lhsMax = maxs[0];
+        const unsigned int axis = lhsMin.code & 0xE0000000;
+        const unsigned int globalIndex = lhsMin.GetAxis();
         if (globalIndex != 6) { // If any dummy values (axis == 6) have been used,
             // then now is the time to discard them.
             const MortonBound old = bounds[globalIndex];

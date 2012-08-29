@@ -79,20 +79,20 @@ struct RayMortonCoder {
     __host__ __device__ inline unsigned int CreateUIndex(const float u) { return (u + 1.0f) * 31.999f; }
     __host__ __device__ inline unsigned int CreateVIndex(const float v) { return (v + 1.0f) * 31.999f; }
     
-    __host__ __device__ inline float XMin(const unsigned int xIndex) { return (float)xIndex / (63.999f * boundInvSize.x) + bound.min.x; }
-    __host__ __device__ inline float XMax(const unsigned int xIndex) { return XMin(xIndex+1.0f); }
-    __host__ __device__ inline float YMin(const unsigned int yIndex) { return (float)yIndex / (31.999f * boundInvSize.y) + bound.min.y; }
-    __host__ __device__ inline float YMax(const unsigned int yIndex) { return YMin(yIndex+1.0f); }
-    __host__ __device__ inline float ZMin(const unsigned int zIndex) { return (float)zIndex / (63.999f * boundInvSize.z) + bound.min.z; }
-    __host__ __device__ inline float ZMax(const unsigned int zIndex) { return ZMin(zIndex+1.0f); }
+    __host__ __device__ inline float XMin(const unsigned int xIndex) const { return (float)xIndex / (63.999f * boundInvSize.x) + bound.min.x; }
+    __host__ __device__ inline float XMax(const unsigned int xIndex) const { return XMin(xIndex+1.0f); }
+    __host__ __device__ inline float YMin(const unsigned int yIndex) const { return (float)yIndex / (31.999f * boundInvSize.y) + bound.min.y; }
+    __host__ __device__ inline float YMax(const unsigned int yIndex) const { return YMin(yIndex+1.0f); }
+    __host__ __device__ inline float ZMin(const unsigned int zIndex) const { return (float)zIndex / (63.999f * boundInvSize.z) + bound.min.z; }
+    __host__ __device__ inline float ZMax(const unsigned int zIndex) const { return ZMin(zIndex+1.0f); }
 
-    __host__ __device__ inline float UMin(const unsigned int uIndex) { return (float)uIndex / 31.999f - 1.0f; }
-    __host__ __device__ inline float UMax(const unsigned int uIndex) { return UMin(uIndex+1.0f); }
-    __host__ __device__ inline float VMin(const unsigned int vIndex) { return (float)vIndex / 31.999f - 1.0f; }
-    __host__ __device__ inline float VMax(const unsigned int vIndex) { return VMin(vIndex+1.0f); }
+    __host__ __device__ inline float UMin(const unsigned int uIndex) const { return (float)uIndex / 31.999f - 1.0f; }
+    __host__ __device__ inline float UMax(const unsigned int uIndex) const { return UMin(uIndex+1.0f); }
+    __host__ __device__ inline float VMin(const unsigned int vIndex) const { return (float)vIndex / 31.999f - 1.0f; }
+    __host__ __device__ inline float VMax(const unsigned int vIndex) const { return VMin(vIndex+1.0f); }
     
-    __host__ __device__ inline HyperCube HyperCubeFromBound(MortonBound b) {
-        const SignedAxis axis = MortonCode::AxisFromCode(b.min);
+    __host__ __device__ inline HyperCube HyperCubeFromBound(MortonBound b) const {
+        const SignedAxis axis = b.min.GetAxis();
 
         b.min = b.min.WithoutAxis();
         b.max = b.max.WithoutAxis();
@@ -122,6 +122,17 @@ struct InvalidAxis {
     __host__ __device__
     inline bool operator()(const MortonBound b) const {
         return (b.min & 0xE0000000) >= 0xC0000000;
+    }
+};
+
+struct MortonBoundToHyperCube {
+    RayMortonCoder coder;
+    MortonBoundToHyperCube(RayMortonCoder c) : coder(c) {}
+
+    __host__ __device__    
+    thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> operator()(const MortonBound mb) const {
+        HyperCube hc = coder.HyperCubeFromBound(mb);
+        return thrust::make_tuple(hc.a, hc.x, hc.y, hc.z, hc.u, hc.v);
     }
 };
 
@@ -157,7 +168,21 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     MortonBound firstBound = bounds[0];
     std::cout << "HyperCube: " << rayMortonCoder.HyperCubeFromBound(firstBound) << std::endl;
 
-    exit(0);
+    HyperCubes hCubes(bounds.size());
+    thrust::transform(bounds.begin(), bounds.end(), 
+                      hCubes.Begin(), MortonBoundToHyperCube(rayMortonCoder));
+    std::cout << hCubes << std::endl;
+
+    unsigned int spherePartitionPivots[hCubes.Size() + 1];
+    sphereIndices = new SphereContainer(hCubes, spheres, spherePartitionPivots);
+    // std::cout << sphereIndices->ToString() << std::endl;
+
+    std::cout << "sphere partition pivots: ";
+    for (int p = 0; p < hCubes.Size() + 1; ++p)
+        std::cout << spherePartitionPivots[p] << ", ";
+    std::cout << std::endl;
+
+    //exit(0);
 
     
     // sphereIndices = new SphereContainer(spheres, bounds.size() * spheres.Size());

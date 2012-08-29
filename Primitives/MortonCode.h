@@ -34,7 +34,7 @@ struct MortonCode {
     __host__ __device__ static inline unsigned int CodeFromIndex(const unsigned int index, const int offset) { return Utils::Morton::PartBy4(index) << offset; }
     __host__ __device__ static inline unsigned int IndexFromCode(const MortonCode code, const int offset) { return Utils::Morton::CompactBy4(code.code >> offset); }
     __host__ __device__ static inline MortonCode EncodeAxis(const unsigned int a) { return MortonCode(a << 29); }
-    __host__ __device__ static inline SignedAxis AxisFromCode(const MortonCode code) { return SignedAxis((code.code & 0xE0000000) >> 29); }
+    __host__ __device__ inline SignedAxis GetAxis() const { return SignedAxis((code & 0xE0000000) >> 29); }
 
     __host__ __device__ inline MortonCode& operator=(const unsigned int rhs) { code = rhs; return *this; }
     __host__ __device__ inline void operator+=(const MortonCode rhs) { code += rhs; }
@@ -45,7 +45,7 @@ struct MortonCode {
 
     inline std::string ToString() const {
         std::ostringstream out;
-        SignedAxis axis = AxisFromCode(*this);
+        SignedAxis axis = GetAxis();
         MortonCode tmp = MortonCode(code & 0x1FFFFFFF);
         unsigned int x = IndexFromCode(tmp, xOffset);
         unsigned int y = IndexFromCode(tmp, yOffset);
