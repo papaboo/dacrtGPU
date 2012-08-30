@@ -33,7 +33,7 @@ namespace Kernels {
         __syncthreads();
         
         const unsigned int axis = lhsMin & 0xE0000000;
-        if (axis == lhsMin & 0xE0000000) { // Compare axis
+        if (axis == (rhsMin & 0xE0000000)) { // Compare axis
             // Both have the same owner, so store the result back in shared
             // memory.
             min[index] = Morton::MinBy4(lhsMin.WithoutAxis(), rhsMin.WithoutAxis()) + axis;
@@ -50,6 +50,8 @@ namespace Kernels {
             const unsigned int max = Morton::MaxBy4(lhsMax.WithoutAxis(), old.max.WithoutAxis()) + axis;
             bounds[globalIndex] = MortonBound::Create(min, max);
         }
+
+        __syncthreads();
     }
 
     __global__
@@ -58,10 +60,6 @@ namespace Kernels {
                                        MortonBound* intermediateBounds,
                                        MortonBound* bounds,
                                        const size_t boundsSize) {
-
-        // Fill bounds with default values
-        for (unsigned int i = blockDim.x * blockIdx.x + threadIdx.x; i < boundsSize; i += blockDim.x * gridDim.x)
-            bounds[i] = MortonBound::Create(0xDFFFFFFF, 0xC0000000);
 
         __shared__ volatile unsigned int min[256];
         __shared__ volatile unsigned int max[256];
@@ -118,8 +116,7 @@ namespace Kernels {
     void ReduceMinMaxMortonByAxisPass2(MortonBound* intermediateBounds,
                                        const size_t intermediateBoundsSize,
                                        MortonBound* bounds,
-                                       const size_t boundsSize,
-                                       MortonCode* sharedMin) {
+                                       const size_t boundsSize) {
     
         __shared__ volatile unsigned int mins[128];
         __shared__ volatile unsigned int maxs[128];
@@ -130,42 +127,25 @@ namespace Kernels {
         maxs[threadIdx.x] = b.max;
         __syncthreads();
 
-        sharedMin[threadIdx.x] = mins[threadIdx.x];
-
         // Reduce 128 values left in shared memory
         if (threadIdx.x >= 64) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
         __syncthreads();
 
-        sharedMin[128 + threadIdx.x] = mins[threadIdx.x];
-        sharedMin[128 + 64 + threadIdx.x] = mins[64 + threadIdx.x];
-
         if (threadIdx.x >= 32) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
-
-        for (unsigned int i = 0; i < 128; i+=32)
-            sharedMin[256 + i + threadIdx.x] = mins[i + threadIdx.x];
 
         if (threadIdx.x >= 16) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
 
-        for (unsigned int i = 0; i < 128; i+=16)
-            sharedMin[384 + i + threadIdx.x] = mins[i + threadIdx.x];
-
         if (threadIdx.x >= 8) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
-        for (unsigned int i = 0; i < 128; i+=8)
-            sharedMin[512 + i + threadIdx.x] = mins[i + threadIdx.x];
 
         if (threadIdx.x >= 4) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
-        for (unsigned int i = 0; i < 128; i+=4)
-            sharedMin[640 + i + threadIdx.x] = mins[i + threadIdx.x];
     
         if (threadIdx.x >= 2) return;
         PerformMinMaxMortonByAxisReduction(threadIdx.x, mins, maxs, bounds);
-        for (unsigned int i = 0; i < 128; i+=2)
-            sharedMin[768 + i + threadIdx.x] = mins[i + threadIdx.x];
     
         // Reduce the last value, comparing it to what is already stored in bounds
         const MortonCode lhsMin = mins[0];
@@ -187,36 +167,16 @@ namespace Kernels {
                                   thrust::device_vector<MortonBound>::iterator boundsBegin,
                                   thrust::device_vector<MortonBound>::iterator boundsEnd) {
 
-        /*
-        MortonCode code = (unsigned int)*mortonBegin;
-        MortonBound bound = MortonBound::Create(code, code);
-        ++mortonBegin;
-        while (mortonBegin != mortonEnd) {
-            code = *mortonBegin;
-            SignedAxis axis = bound.min.GetAxis();
-            if (axis == code.GetAxis()) {
-                bound.min = Morton::MinBy4(bound.min.WithoutAxis(), code.WithoutAxis()) + axis;
-                bound.max = Morton::MaxBy4(bound.max.WithoutAxis(), code.WithoutAxis()) + axis;
-            } else {
-                *(boundsBegin+(int)axis) = bound;
-                
-                bound = MortonBound::Create(code, code);
-            }
-            
-            ++mortonBegin;
-        }
-        SignedAxis axis = bound.min.GetAxis();
-        *(boundsBegin+(int)axis) = bound;
-
-        return;
-        */
-
         // Verify that CUDA is initialized
         if (!Meta::CUDA::initialized)
             throw std::runtime_error("CUDA wasn't initialized. Can't lookup kernel properties");
     
         const size_t inputSize = mortonEnd - mortonBegin;
         const size_t boundsSize = boundsEnd - boundsBegin; // Always 6, but this looks less like magic.
+
+        // Init bounds to default asshat values.
+        MortonBound defaultBound = MortonBound::Create(0xDFFFFFFF, 0xC0000000);
+        thrust::fill(boundsBegin, boundsEnd, defaultBound);
     
         // struct cudaFuncAttributes funcAttr;
         // cudaFuncGetAttributes(&funcAttr, ReduceMinMaxMortonByAxisPass1);
@@ -226,38 +186,31 @@ namespace Kernels {
 
         static thrust::device_vector<MortonBound> intermediateBounds(boundsSize * 2);
 
-        std::cout << "MortonCode's:\n";
-        for (int i = 0; i < inputSize; ++i) {
-            std::cout << i << ": " << (MortonCode)mortonBegin[i];
-            if (i < inputSize-1)
-                std::cout << "\n";
-        }
-        std::cout << "\n" << std::endl;
-
+        // std::cout << "MortonCode's:\n";
+        // for (int i = 0; i < inputSize; ++i) {
+        //     std::cout << i << ": " << (MortonCode)mortonBegin[i] << " - " << mortonBegin[i];
+        //     if (i < inputSize-1)
+        //         std::cout << "\n";
+        // }
+        // std::cout << "\n" << std::endl;
     
         ReduceMinMaxMortonByAxisPass1<<<blocks, blockDim>>>(RawPointer(mortonBegin), inputSize,
                                                             RawPointer(intermediateBounds),
                                                             thrust::raw_pointer_cast(&*boundsBegin), boundsSize);
 
-        std::cout << "intermediateBounds\n" << intermediateBounds << std::endl;
-        std::cout << std::endl;
+        // std::cout << "intermediateBounds\n" << intermediateBounds << std::endl;
+        // std::cout << std::endl;
 
-        std::cout << "bounds:\n";
-        for (int i = 0; i < boundsSize; ++i) {
-            std::cout << i << ": " << boundsBegin[i];
-            if (i < boundsSize-1)
-                std::cout << "\n";
-        }
-        std::cout << "\n" << std::endl;
-
-        thrust::device_vector<MortonCode> shared(128 * 7);
+        // std::cout << "bounds:\n";
+        // for (int i = 0; i < boundsSize; ++i) {
+        //     std::cout << i << ": " << boundsBegin[i];
+        //     if (i < boundsSize-1)
+        //         std::cout << "\n";
+        // }
+        // std::cout << "\n" << std::endl;
     
         ReduceMinMaxMortonByAxisPass2<<<1, 128>>>(RawPointer(intermediateBounds), intermediateBounds.size(),
-                                                  thrust::raw_pointer_cast(&*boundsBegin), boundsSize, 
-                                                  RawPointer(shared));
-
-        std::cout << "sharedMin:\n" << shared << std::endl;
-
+                                                  thrust::raw_pointer_cast(&*boundsBegin), boundsSize);
     }
 
 }
