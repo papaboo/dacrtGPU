@@ -12,6 +12,7 @@
 #include <Enums.h>
 #include <Utils/Morton.h>
 #include <Utils/ToString.h>
+#include <Utils/Utils.h>
 
 #include <string>
 #include <sstream>
@@ -34,7 +35,7 @@ struct MortonCode {
     __host__ __device__ static inline unsigned int CodeFromIndex(const unsigned int index, const int offset) { return Utils::Morton::PartBy4(index) << offset; }
     __host__ __device__ static inline unsigned int IndexFromCode(const MortonCode code, const int offset) { return Utils::Morton::CompactBy4(code.code >> offset); }
     __host__ __device__ static inline MortonCode EncodeAxis(const unsigned int a) { return MortonCode(a << 29); }
-    __host__ __device__ inline SignedAxis GetAxis() const { return SignedAxis((code & 0xE0000000) >> 29); }
+    __host__ __device__ inline SignedAxis GetAxis() const { return SignedAxis(code >> 29); }
 
     __host__ __device__ inline MortonCode& operator=(const unsigned int rhs) { code = rhs; return *this; }
     __host__ __device__ inline void operator+=(const MortonCode rhs) { code += rhs; }
@@ -75,6 +76,20 @@ struct MortonBound {
     inline static MortonBound Create(const unsigned int min, const unsigned int max) {
         MortonBound b; b.min = min; b.max = max; 
         return b;
+    }
+
+    __host__ __device__
+    inline bool Splitable() const {
+        return min.code == max.code;
+    }
+
+    __host__ __device__
+    inline bool Splitable(MortonBound &leftPartition, MortonBound &rightPartition) const {
+
+        unsigned int diff = min.code ^ max.code;
+        int index = FirstBitSet(diff);
+        
+        return true;
     }
 
     inline std::string ToString() const {
