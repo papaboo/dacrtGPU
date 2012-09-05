@@ -78,18 +78,47 @@ struct MortonBound {
         return b;
     }
 
+    /**
+     * Checks if a bound is a leaf or if further splits are possble.
+     */
     __host__ __device__
     inline bool Splitable() const {
         return min.code == max.code;
     }
 
+    /**
+     * Splits the MortonBound along it's most significant bit, i.e. the next
+     * possible split, and returns the resulting left and right bounds
+     *
+     * This method assumes that it is infact possible to split the
+     * bound. Attempting to split an unsplitable bound (i.e. min == max) results
+     * in undefined behaviour.
+     */
     __host__ __device__
-    inline bool Splitable(MortonBound &leftPartition, MortonBound &rightPartition) const {
+    inline void Split(MortonBound &left, MortonBound &right) const {
 
         unsigned int diff = min.code ^ max.code;
-        int index = FirstBitSet(diff);
+        diff = ReverseBits(diff);
+
+        int n = FirstBitSet(diff) - 1;
+
+        const unsigned int CODE_MASK = 0x84210842;
+        unsigned int shiftedMask = CODE_MASK >> (n + 5);
+
+        // The new right minimum code is found by zeroing out every bit
+        // associated with the chosen axis below the n'th bit and setting the
+        // bit at n to 1.
+        // In terms of seeing the morton code as a walk down a binary tree this
+        // corrosponds to choosing the right child at the n'th step and then
+        // going left every time you see the axis next.
+        MortonCode rightMinCode = (min & ~shiftedMask) | (0x80000000 >> n);
+        right = MortonBound::Create(rightMinCode, max);
         
-        return true;
+        // Likewise the left maximum is found by setting the n'th bit to 0 and
+        // every following 5'th bit to 1, corrosponding to a walking left at the
+        // n'th node and subsequently right whenever that axis is split.
+        MortonCode leftMaxCode = (max & ~(CODE_MASK >> n)) | shiftedMask;
+        left = MortonBound::Create(min, leftMaxCode);
     }
 
     inline std::string ToString() const {
