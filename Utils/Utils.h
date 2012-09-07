@@ -12,9 +12,9 @@
 #include <thrust/device_vector.h>
 
 #include <iostream>
-#include <cstdlib>
 
 #include <Enums.h>
+#include <Utils/Math.h>
 
 typedef thrust::device_vector<bool>::iterator BoolIterator;
 typedef thrust::device_vector<char>::iterator CharIterator;
@@ -28,33 +28,32 @@ typedef thrust::device_vector<Axis>::iterator AxisIterator;
 typedef thrust::device_vector<PartitionSide>::iterator PartitionSideIterator;
 
 template <class T>
-__host__ __device__
-inline T Max(const T lhs, const T rhs) {
-    return lhs < rhs ? rhs : lhs;
-}
-
-template <class T>
-__host__ __device__
-inline T Min(const T lhs, const T rhs) {
-    return lhs > rhs ? rhs : lhs;
-}
-
-inline float Rand01() {
-    return (float)rand() / (float)RAND_MAX;
-}
-
-template <class T>
-inline T Clamp01(T v) { 
-    return v < T(0) ? T(0) : v > T(1) ? T(1) : v;
-}
-
-template <class T>
 inline T* RawPointer(thrust::device_vector<T>& v) {
     return thrust::raw_pointer_cast(v.data());
 }
 template <class T>
 inline T* RawPointer(typename thrust::detail::normal_iterator<thrust::device_ptr<T> > v) {
     return thrust::raw_pointer_cast(&*v);
+}
+
+__host__ __device__ inline int FirstBitSet(const int n) {
+#ifdef __CUDA_ARCH__
+    return __ffs(n);
+#else
+    return ffs(n);
+#endif    
+}
+
+__host__ __device__ inline unsigned int ReverseBits(unsigned int x) {
+#ifdef __CUDA_ARCH__
+    return __brev(x);
+#else
+    x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1));
+    x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2));
+    x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4));
+    x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8));
+    return((x >> 16) | (x << 16));
+#endif    
 }
 
 inline int ToByte(float v) {

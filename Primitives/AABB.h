@@ -9,8 +9,8 @@
 #ifndef _GPU_DACRT_AABB_H_
 #define _GPU_DACRT_AABB_H_
 
+#include <Utils/Math.h>
 #include <Utils/ToString.h>
-#include <Utils/Utils.h>
 
 #include <cutil_math.h>
 

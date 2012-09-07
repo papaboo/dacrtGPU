@@ -11,8 +11,8 @@
 #include <DacrtNode.h>
 #include <Rays.h>
 #include <Meta/CUDA.h>
+#include <Utils/Math.h>
 #include <Utils/ToString.h>
-#include <Utils/Utils.h>
 
 #include <ostream>
 #include <iomanip>

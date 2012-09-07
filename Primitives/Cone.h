@@ -11,15 +11,13 @@
 
 #include <Primitives/HyperCube.h>
 #include <Primitives/Sphere.h>
+#include <Utils/Math.h>
 
 #include <cutil_math.h>
 
 #include <string>
 #include <sstream>
 #include <iomanip>
-
-#define Min(lhs, rhs) (lhs) < (rhs) ? (lhs) : (rhs)
-#define Max(lhs, rhs) (lhs) > (rhs) ? (lhs) : (rhs)
 
 struct Cone {
     float3 apex;
