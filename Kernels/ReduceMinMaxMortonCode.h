@@ -22,4 +22,4 @@ namespace Kernels {
     
 };
 
-#endif _GPU_DACRT_KERNELS_MIN_MAX_MORTON_CODE_H_
+#endif // _GPU_DACRT_KERNELS_MIN_MAX_MORTON_CODE_H_
