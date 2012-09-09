@@ -184,7 +184,7 @@ namespace Kernels {
         const unsigned int blockDim = 128;
         const unsigned int blocks = Meta::CUDA::activeCudaDevice.multiProcessorCount;
 
-        static thrust::device_vector<MortonBound> intermediateBounds(boundsSize * 2);
+        static thrust::device_vector<MortonBound> intermediateBounds(blocks * 2);
 
         // std::cout << "MortonCode's:\n";
         // for (int i = 0; i < inputSize; ++i) {
