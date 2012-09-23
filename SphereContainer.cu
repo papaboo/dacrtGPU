@@ -47,7 +47,7 @@ __constant__ Cone d_cone;
 
 struct CompareConeSphere {
 
-    CompareConeSphere(thrust::device_vector<Cone> cones, unsigned int index) {
+    CompareConeSphere(thrust::device_vector<Cone>& cones, unsigned int index) {
         Cone* cone = thrust::raw_pointer_cast(cones.data()) + index;
         cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(Cone), 0, cudaMemcpyDeviceToDevice);
         // const float invSinToAngle = 1.0f / std::sin(spreadAngle);
