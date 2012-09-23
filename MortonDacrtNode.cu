@@ -22,6 +22,7 @@
 #include <iostream>
 
 #include <thrust/remove.h>
+#include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
@@ -268,8 +269,8 @@ struct SpherePartitioningByCones {
     Sphere* spheres;
     SpherePartitioningByCones(thrust::device_vector<Cone>& cs, 
                               thrust::device_vector<Sphere>& ss)
-        : cones(thrust::raw_pointer_cast(cs.data())),
-          spheres(thrust::raw_pointer_cast(ss.data())) {}
+        : cones(RawPointer(cs)),
+          spheres(RawPointer(ss)) {}
     
     __device__
     uint2 operator()(const unsigned int sphereId, const unsigned int owner) const {
@@ -285,6 +286,18 @@ struct SpherePartitioningByCones {
     }
 };
 
+__global__
+void AddFinalLeftIndexToRightIndices(uint2* indices,
+                                     const uint2* const indicesEnd) {
+
+    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (indices + id > indicesEnd) return;
+
+    const unsigned int leftTotal = indicesEnd[0].x;
+    uint2 lrIndex = indices[id];
+    lrIndex.y += leftTotal;
+    indices[id] = lrIndex;
+}
 
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
     
@@ -339,7 +352,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     
     // Geometry partition
     
-    doneSpherePartitions = 0;
+    doneSpherePartitions = doneSphereIndices = 0;
     while (spherePartitions.size() - doneSpherePartitions > 0) {
         // Create new ray partitions through binary search
         nextRayPartitions.resize(rayPartitions.size() * 2);
@@ -369,16 +382,32 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         thrust::transform(hyperCubes.Begin(), hyperCubes.End(), cones.begin(), CreateCones());
         std::cout << "cones:\n" << cones << std::endl;
 
-        // Assign geometry to each childs cone.
-
+        // Assign geometry to each childs cone and compute new indices for geometry moved left and right.
         static thrust::device_vector<uint2> sphereLeftRightIndices(sphereIndices.size());
-        sphereLeftRightIndices.resize(sphereIndices.size() - doneSphereIndices);
-        // SpherePartitioningByCones
-        
-        // Remove leafs
+        sphereLeftRightIndices[0] = make_uint2(0, 0);
+        sphereLeftRightIndices.resize(sphereIndices.size() - doneSphereIndices + 1); // +1 for dummy element
+        thrust::transform(sphereIndices.begin() + doneSphereIndices, sphereIndices.end() + doneSphereIndices,
+                          sphereIndexPartition.begin() + doneSphereIndices, 
+                          sphereLeftRightIndices.begin() + 1,
+                          SpherePartitioningByCones(cones, spheres.spheres));
+        std::cout << "sphereLeftRightIndices:\n" << sphereLeftRightIndices << std::endl;
+
+        thrust::inclusive_scan(sphereLeftRightIndices.begin() + 1, sphereLeftRightIndices.end(),
+                               sphereLeftRightIndices.begin() + 1);
+
+        cudaFuncGetAttributes(&funcAttr, AddFinalLeftIndexToRightIndices);
+        blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+        blocks = (sphereLeftRightIndices.size() / blocksize) + 1;
+        AddFinalLeftIndexToRightIndices<<<blocks, blocksize>>>(RawPointer(sphereLeftRightIndices),
+                                                              RawPointer(sphereLeftRightIndices) + sphereLeftRightIndices.size()-1);
+        std::cout << "sphereLeftRightIndices:\n" << sphereLeftRightIndices << std::endl;
+
 
 
         rayPartitions.swap(nextRayPartitions);
+
+        // Remove leafs
+
 
         exit(0);
     }
@@ -395,7 +424,7 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
     sphereIndices.resize(spheres.Size() * cubes.Size());
     sphereIndexPartition.resize(sphereIndices.size());
     
-    thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be parsed in from outside to save allocation and dealloc?
+    thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be passed in from outside to save allocation and dealloc?
     thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateCones());
 
     unsigned int spherePartitionPivots[cubes.Size() + 1];
@@ -414,6 +443,7 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
     }
     const size_t currentSize = spherePartitionPivots[cubes.Size()];
     sphereIndices.resize(currentSize);
+    sphereIndexPartition.resize(sphereIndices.size());
     nextSphereIndices.resize(sphereIndices.size());
 
     std::cout << "sphere partition pivots: ";
