@@ -78,6 +78,23 @@ struct MortonBound {
         return b;
     }
 
+    __host__ __device__    
+    inline static MortonBound LowestCommonBound(const MortonCode min, const MortonCode max) {
+        unsigned int diff = min.code ^ max.code;
+        diff = ReverseBits(diff);
+
+        int n = FirstBitSet(diff) - 1;
+        
+        MortonBound b; 
+        const unsigned int minMask = 0XFFFFFFFF << (31-n);
+        b.min = min & minMask;
+
+        const unsigned int maxMask = 0XFFFFFFFF >> (n+1);
+        b.max = max | maxMask;
+
+        return b;
+    }
+    
     /**
      * Checks if a bound is a leaf or if further splits are possble.
      */
@@ -98,9 +115,7 @@ struct MortonBound {
     inline void Split(MortonBound &left, MortonBound &right) const {
 
         unsigned int diff = min.code ^ max.code;
-        diff = ReverseBits(diff);
-
-        int n = FirstBitSet(diff) - 1;
+        int n = LastBitSet(diff) - 1;
 
         const unsigned int CODE_MASK = 0x84210842;
         unsigned int shiftedMask = CODE_MASK >> (n + 5);
