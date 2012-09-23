@@ -36,14 +36,6 @@ inline T* RawPointer(typename thrust::detail::normal_iterator<thrust::device_ptr
     return thrust::raw_pointer_cast(&*v);
 }
 
-__host__ __device__ inline int FirstBitSet(const int n) {
-#ifdef __CUDA_ARCH__
-    return __ffs(n);
-#else
-    return ffs(n);
-#endif    
-}
-
 __host__ __device__ inline unsigned int ReverseBits(unsigned int x) {
 #ifdef __CUDA_ARCH__
     return __brev(x);
@@ -55,6 +47,19 @@ __host__ __device__ inline unsigned int ReverseBits(unsigned int x) {
     return((x >> 16) | (x << 16));
 #endif    
 }
+
+__host__ __device__ inline int FirstBitSet(const int n) {
+#ifdef __CUDA_ARCH__
+    return __ffs(n);
+#else
+    return ffs(n);
+#endif    
+}
+
+__host__ __device__ inline int LastBitSet(const int n) {
+    return FirstBitSet(ReverseBits(n));
+}
+
 
 inline int ToByte(float v) {
     return int(pow(Clamp01(v),1/2.2f)*255.0f+.5f);
