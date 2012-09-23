@@ -258,7 +258,6 @@ struct CreateCones {
         return Cone::FromCube(cube);
     }
 };
-static CreateCones createCones;
 
 __constant__ unsigned int d_oldCubeCount;
 
@@ -498,7 +497,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // computed faster if computed together in one thread.
     static thrust::device_vector<Cone> cones(cubes.Size());
     cones.resize(cubes.Size() * 2);
-    thrust::transform(splitCubes.Begin(), splitCubes.End(), cones.begin(), createCones);
+    thrust::transform(splitCubes.Begin(), splitCubes.End(), cones.begin(), CreateCones());
 
     // Calculate current sphere owners. TODO Use a work queue instead
     static thrust::device_vector<unsigned int> sphereOwners(spheres.CurrentSize());
