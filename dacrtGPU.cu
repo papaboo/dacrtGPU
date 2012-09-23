@@ -45,7 +45,6 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
 
     MortonDacrtNodes mNodes = MortonDacrtNodes(1);
     mNodes.Create(rays, spheres);
-    exit(0);
     
     DacrtNodes nodes = DacrtNodes(1);
     unsigned int bounce = 0;
@@ -118,7 +117,7 @@ int main(int argc, char *argv[]){
     Fragments frags(WIDTH * HEIGHT * samples);
     thrust::device_vector<float4> colors(WIDTH * HEIGHT);
 
-    SpheresGeometry geom = SpheresGeometry::CornellBox(500);
+    SpheresGeometry geom = SpheresGeometry::CornellBox(10);
     // cout << geom << endl;
 
     for (int i = 0; i < iterations; ++i) {
