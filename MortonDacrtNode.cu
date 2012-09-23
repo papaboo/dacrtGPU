@@ -11,6 +11,7 @@
 #include <HyperCubes.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <Primitives/AABB.h>
+#include <Primitives/Cone.h>
 #include <Primitives/HyperCube.h>
 #include <Primitives/MortonCode.h>
 #include <RayContainer.h>
@@ -28,9 +29,14 @@ using std::cout;
 using std::endl;
 
 MortonDacrtNodes::MortonDacrtNodes(const size_t capacity) 
-    : rayPartitions(capacity), 
-      spherePartitions(capacity), nextSpherePartitions(capacity) {}
+    : rayPartitions(capacity), nextRayPartitions(capacity), 
+      spherePartitions(capacity), nextSpherePartitions(capacity),
+      sphereIndices(capacity), nextSphereIndices(capacity) {}
 
+// TODO Apply the reduced upper bounds to the next levels partition bounds, to
+// avoid to many false positives (in case of cone intersection, this means
+// reducing the area between the hypercube and the cone, where false positives
+// occur)
 
 struct RayMortonCoder {
     
@@ -123,6 +129,12 @@ struct InvalidAxis {
     inline bool operator()(const MortonBound b) const {
         return (b.min & 0xE0000000) >= 0xC0000000;
     }
+
+    __host__ __device__
+    inline bool operator()(const thrust::tuple<uint2, MortonBound> i) const {
+        const uint2 partition = thrust::get<0>(i);
+        return partition.x >= partition.y;
+    }
 };
 
 struct MortonBoundToHyperCube {
@@ -135,6 +147,144 @@ struct MortonBoundToHyperCube {
         return thrust::make_tuple(hc.a, hc.x, hc.y, hc.z, hc.u, hc.v);
     }
 };
+
+__global__
+void FindInitialRayPartitions(const unsigned int* const rayMortonCodes,
+                              const size_t codes,
+                              uint2* rayPartitions) {
+
+    if (threadIdx.x >= 6) return;
+    
+    __shared__ unsigned int pivots[12];
+
+    pivots[0] = 0;
+    pivots[11] = codes;
+
+    if (threadIdx.x < 5) {
+        size_t min = 0, max = codes;
+        while (min < max) {
+            const size_t mid = (min + max) / 2;
+            MortonCode value = rayMortonCodes[mid];
+            SignedAxis axis = value.GetAxis();
+            min = axis < threadIdx.x ? (mid+1) : min;
+            max = axis < threadIdx.x ? max : mid;
+        }
+
+        pivots[threadIdx.x * 2 + 1] = pivots[threadIdx.x * 2 + 2] = min;
+    }
+    __syncthreads();
+    
+    rayPartitions[threadIdx.x] = make_uint2(pivots[threadIdx.x * 2], pivots[threadIdx.x * 2 + 1]);
+}
+
+__global__
+void FindNewRayPartitions(const uint2* const rayPartitions,
+                          const unsigned int rayPartitionCount,
+                          const unsigned int* const rayMortonCodes,
+                          uint4* nextRayPartitions) {
+    
+    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    
+    if (id >= rayPartitionCount) return;
+    
+    const uint2 partition = rayPartitions[id];
+    const MortonCode min = rayMortonCodes[partition.x];
+    const MortonCode max = rayMortonCodes[partition.y-1];
+    
+    const unsigned int diff = min.code ^ max.code;
+    const int n = LastBitSet(diff) - 1;
+
+    const unsigned int mask = 0XFFFFFFFF << (31-n);
+    const MortonCode rightMin = max & mask;
+    
+    uint2 pivot = partition;
+    while (pivot.x < pivot.y) {
+        const size_t mid = (pivot.x + pivot.y) / 2;
+        MortonCode value = rayMortonCodes[mid] & mask;
+        pivot.x = value < rightMin ? (mid+1) : pivot.x;
+        pivot.y = value < rightMin ? pivot.y : mid;
+    }
+    
+    nextRayPartitions[id] = make_uint4(partition.x, pivot.x,
+                                       pivot.x, partition.y);
+}
+
+struct CreateBoundsFromPartitions {
+    unsigned int* rayMortonCodes;
+
+    CreateBoundsFromPartitions(thrust::device_vector<unsigned int>& codes)
+        : rayMortonCodes(RawPointer(codes)) {}
+    
+    __host__ __device__
+    MortonBound operator()(const uint2 rayPartition) const {
+        const MortonCode min = rayMortonCodes[rayPartition.x];
+        const MortonCode max = rayMortonCodes[rayPartition.y-1];
+        
+        return MortonBound::LowestCommonBound(min, max);
+    }
+};
+
+struct CreateHyperCubesFromBounds {
+    
+    RayMortonCoder rayMortonCoder;
+    CreateHyperCubesFromBounds(const RayMortonCoder& rMC)
+        : rayMortonCoder(rMC) {}
+
+    __host__ __device__
+    thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> operator()(const MortonBound bound) const {
+        HyperCube cube = rayMortonCoder.HyperCubeFromBound(bound);
+        
+        return thrust::tuple<SignedAxis, float2, float2, float2, float2, float2>
+            (cube.a, cube.x, cube.y, cube.z, cube.u, cube.v);
+    }
+};
+
+struct CreateCones {
+    __host__ __device__
+    Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
+        const HyperCube cube(thrust::get<0>(c), thrust::get<1>(c), thrust::get<2>(c),
+                             thrust::get<3>(c), thrust::get<4>(c), thrust::get<5>(c));
+        
+        return Cone::FromCube(cube);
+    }
+};
+
+__constant__ Cone d_cone;
+struct CompareConeSphere {
+    
+    CompareConeSphere(thrust::device_vector<Cone>& cones, unsigned int index) {
+        Cone* cone = thrust::raw_pointer_cast(cones.data()) + index;
+        cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(Cone), 0, cudaMemcpyDeviceToDevice);
+    }
+    
+    __device__
+    bool operator()(const Sphere s) {
+        return d_cone.DoesIntersect(s);//, d_invSinToAngle, d_cosToAngleSqr);
+    }
+};
+
+struct SpherePartitioningByCones {
+    Cone* cones;
+    Sphere* spheres;
+    SpherePartitioningByCones(thrust::device_vector<Cone>& cs, 
+                              thrust::device_vector<Sphere>& ss)
+        : cones(thrust::raw_pointer_cast(cs.data())),
+          spheres(thrust::raw_pointer_cast(ss.data())) {}
+    
+    __device__
+    uint2 operator()(const unsigned int sphereId, const unsigned int owner) const {
+        const Sphere sphere = spheres[sphereId];
+        
+        uint2 res;
+        const Cone leftCone = cones[owner * 2];
+        res.x = leftCone.DoesIntersect(sphere) ? 1 : 0;
+        
+        const Cone rightCone = cones[owner * 2 + 1];
+        res.y = rightCone.DoesIntersect(sphere) ? 1 : 0;
+        return res;
+    }
+};
+
 
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
     
@@ -160,56 +310,122 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     Kernels::ReduceMinMaxMortonByAxis(rayMortonCodes.begin(), rayMortonCodes.end(),
                                       bounds.begin(), bounds.end());
 
-    // Cull inactive partitions.
-    thrust::device_vector<MortonBound>::iterator boundsEnd = thrust::remove_if(bounds.begin(), bounds.end(), InvalidAxis());
-    bounds.resize(boundsEnd - bounds.begin());
-    std::cout << "Bounds:\n" << bounds << std::endl;
-    
-    MortonBound firstBound = bounds[0];
-    std::cout << "HyperCube: " << rayMortonCoder.HyperCubeFromBound(firstBound) << std::endl;
+    // Find ray partition pivots
+    rayPartitions.resize(6);
+    FindInitialRayPartitions<<<1,32>>>(RawPointer(rayMortonCodes), rayMortonCodes.size(),
+                                       RawPointer(rayPartitions));
 
+    // Cull inactive partitions and bounds. (Ode to C++ auto or so I hear...)
+    typedef thrust::zip_iterator<thrust::tuple<thrust::device_vector<uint2>::iterator, 
+        thrust::device_vector<MortonBound>::iterator> > PartitionBoundIterator;
+
+    PartitionBoundIterator partition_bound_begin = 
+        make_zip_iterator(make_tuple(rayPartitions.begin(), bounds.begin()));
+    PartitionBoundIterator partition_bound_end = thrust::remove_if(partition_bound_begin, partition_bound_begin+bounds.size(), InvalidAxis());
+    bounds.resize(partition_bound_end - partition_bound_begin);
+    rayPartitions.resize(bounds.size());
+    std::cout << "Bounds:\n" << bounds << std::endl;
+    std::cout << "rayPartitions:\n" << rayPartitions << std::endl;
+    
     HyperCubes hCubes(bounds.size());
     thrust::transform(bounds.begin(), bounds.end(), 
                       hCubes.Begin(), MortonBoundToHyperCube(rayMortonCoder));
     std::cout << hCubes << std::endl;
 
-    unsigned int spherePartitionPivots[hCubes.Size() + 1];
-    sphereIndices = new SphereContainer(hCubes, spheres, spherePartitionPivots);
+    InitSphereIndices(hCubes, spheres);
+    // sphereIndices = new SphereContainer(hCubes, spheres, spherePartitionPivots);
     // std::cout << sphereIndices->ToString() << std::endl;
 
-    std::cout << "sphere partition pivots: ";
-    for (int p = 0; p < hCubes.Size() + 1; ++p)
-        std::cout << spherePartitionPivots[p] << ", ";
-    std::cout << std::endl;
-
-    //exit(0);
-
     
-    // sphereIndices = new SphereContainer(spheres, bounds.size() * spheres.Size());
-    
-
-    /*    
     // Geometry partition
     
-    while (spheres) {
-        // Calculate bounding boxes for partitions
+    doneSpherePartitions = 0;
+    while (spherePartitions.size() - doneSpherePartitions > 0) {
+        // Create new ray partitions through binary search
+        nextRayPartitions.resize(rayPartitions.size() * 2);
+        struct cudaFuncAttributes funcAttr;
+        cudaFuncGetAttributes(&funcAttr, FindNewRayPartitions);
+        unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+        unsigned int blocks = (rayPartitions.size() / blocksize) + 1;
+        FindNewRayPartitions<<<blocks, blocksize>>>(RawPointer(rayPartitions), rayPartitions.size(),
+                                                    RawPointer(rayMortonCodes),
+                                                    (uint4*)(void*)RawPointer(nextRayPartitions));
+        std::cout << "nextRayPartitions:\n" << nextRayPartitions << std::endl;
 
-        // Split geometry by that plane.
+        // Use the new partitions to approximate the left and right bounds for
+        // ray partitions and split the geometry. TODO All of these
+        // transformations below can be chained into one.
+        bounds.resize(bounds.size() * 2);
+        thrust::transform(nextRayPartitions.begin(), nextRayPartitions.end(), 
+                          bounds.begin(), CreateBoundsFromPartitions(rayMortonCodes));
+        std::cout << "bounds:\n" << bounds << std::endl;
+
+        static HyperCubes hyperCubes(128); hyperCubes.Resize(bounds.size());
+        thrust::transform(bounds.begin(), bounds.end(), 
+                          hyperCubes.Begin(), CreateHyperCubesFromBounds(rayMortonCoder));
+        std::cout << hyperCubes << std::endl;
         
-        // Iterate over next splitting planes, as defined by morton encoding,
-        // until one intersects with the box. This narrows the min-max keys
-        // enclosing the geometry. (Corrosponds to empty space splitting)
+        static thrust::device_vector<Cone> cones(hyperCubes.Size()); cones.resize(hyperCubes.Size());
+        thrust::transform(hyperCubes.Begin(), hyperCubes.End(), cones.begin(), CreateCones());
+        std::cout << "cones:\n" << cones << std::endl;
+
+        // Assign geometry to each childs cone.
+
+        static thrust::device_vector<uint2> sphereLeftRightIndices(sphereIndices.size());
+        sphereLeftRightIndices.resize(sphereIndices.size() - doneSphereIndices);
+        // SpherePartitioningByCones
         
-        // Check if leaves should be partitioned (Since it's spatial
-        // partitioning and primitives can get assigned to both sides, we can't
-        // do in place partitioning.)
+        // Remove leafs
+
+
+        rayPartitions.swap(nextRayPartitions);
+
+        exit(0);
     }
 
     // Sort leaves based on their morton codes?
-
-    // Pair up rays and sphere partitions
-    */
+    
+    // Compute bounds of geometry partitions and do coarse level ray elimination
+    // before intersection.
+    
 }
+
+
+void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& spheres) {
+    sphereIndices.resize(spheres.Size() * cubes.Size());
+    
+    thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be parsed in from outside to save allocation and dealloc?
+    thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateCones());
+
+    unsigned int spherePartitionPivots[cubes.Size() + 1];
+    spherePartitionPivots[0] = 0;
+    for (int c = 0; c < cubes.Size(); ++c) {
+        const UintIterator beginIndices = sphereIndices.begin() + spherePartitionPivots[c];
+        const UintIterator itr = thrust::copy_if(thrust::counting_iterator<unsigned int>(0), thrust::counting_iterator<unsigned int>(spheres.Size()),
+                                                 spheres.BeginSpheres(), 
+                                                 beginIndices,
+                                                 CompareConeSphere(cones, c));
+
+        spherePartitionPivots[c+1] = spherePartitionPivots[c] + (itr - beginIndices);
+    }
+    const size_t currentSize = spherePartitionPivots[cubes.Size()];
+    sphereIndices.resize(currentSize);
+    nextSphereIndices.resize(sphereIndices.size());
+
+    std::cout << "sphere partition pivots: ";
+    for (int p = 0; p < cubes.Size() + 1; ++p)
+        std::cout << spherePartitionPivots[p] << ", ";
+    std::cout << std::endl;
+    
+    thrust::host_vector<uint2> h_spherePartitions(cubes.Size());
+    for (int i = 0; i < h_spherePartitions.size(); ++i)
+        h_spherePartitions[i] = make_uint2(spherePartitionPivots[i], spherePartitionPivots[i+1]);
+
+    spherePartitions.resize(cubes.Size());
+    thrust::copy(h_spherePartitions.begin(), h_spherePartitions.end(), spherePartitions.begin());
+}
+
+
 
 
 void TestMortonEncoding() {

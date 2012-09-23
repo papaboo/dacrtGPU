@@ -14,19 +14,24 @@
 #include <string>
 #include <ostream>
 
+class HyperCubes;
 class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
 
 class MortonDacrtNodes {
     thrust::device_vector<uint2> rayPartitions;
+    thrust::device_vector<uint2> nextRayPartitions;
 
     thrust::device_vector<uint2> spherePartitions;
     thrust::device_vector<uint2> nextSpherePartitions;
-    unsigned int doneSpheres;
+    unsigned int doneSpherePartitions;
 
     RayContainer* rays;
-    SphereContainer* sphereIndices; // self initialized
+    thrust::device_vector<unsigned int> sphereIndices;
+    thrust::device_vector<unsigned int> nextSphereIndices;
+    unsigned int doneSphereIndices;
+
 
 public:
     
@@ -44,10 +49,14 @@ public:
     inline thrust::device_vector<uint2>::iterator BeginRayPartitions() { return rayPartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator EndRayPartitions() { return rayPartitions.end(); }
     
-    inline thrust::device_vector<uint2>::iterator BeginSpherePartitions() { return spherePartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndSpherePartitions() { return spherePartitions.end(); }
-    
     std::string ToString() const;
+
+private:
+    
+    /**
+     * Initializes sphereIndices and spherePartitions.
+     */
+    void InitSphereIndices(HyperCubes& cubes, SpheresGeometry& spheres);
 };
 
 inline std::ostream& operator<<(std::ostream& s, const MortonDacrtNodes& d){
