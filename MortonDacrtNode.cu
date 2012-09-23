@@ -393,6 +393,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
 
 void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& spheres) {
     sphereIndices.resize(spheres.Size() * cubes.Size());
+    sphereIndexPartition.resize(sphereIndices.size());
     
     thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be parsed in from outside to save allocation and dealloc?
     thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateCones());
@@ -405,8 +406,11 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
                                                  spheres.BeginSpheres(), 
                                                  beginIndices,
                                                  CompareConeSphere(cones, c));
-
         spherePartitionPivots[c+1] = spherePartitionPivots[c] + (itr - beginIndices);
+
+        // Write which partitions the sphere indices belong to
+        thrust::fill(sphereIndexPartition.begin() + spherePartitionPivots[c],
+                     sphereIndexPartition.begin() + spherePartitionPivots[c+1], (unsigned int)c);
     }
     const size_t currentSize = spherePartitionPivots[cubes.Size()];
     sphereIndices.resize(currentSize);
