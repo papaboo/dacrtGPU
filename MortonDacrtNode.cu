@@ -10,6 +10,7 @@
 
 #include <HyperCubes.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
+#include <Meta/CUDA.h>
 #include <Primitives/AABB.h>
 #include <Primitives/Cone.h>
 #include <Primitives/HyperCube.h>
@@ -25,6 +26,7 @@
 #include <thrust/scan.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 
 using std::cout;
 using std::endl;
@@ -273,16 +275,22 @@ struct SpherePartitioningByCones {
           spheres(RawPointer(ss)) {}
     
     __device__
-    uint2 operator()(const unsigned int sphereId, const unsigned int owner) const {
+    PartitionSide operator()(const unsigned int sphereId, const unsigned int owner) const {
         const Sphere sphere = spheres[sphereId];
         
-        uint2 res;
         const Cone leftCone = cones[owner * 2];
-        res.x = leftCone.DoesIntersect(sphere) ? 1 : 0;
+        PartitionSide left = leftCone.DoesIntersect(sphere) ? LEFT : NONE;
         
         const Cone rightCone = cones[owner * 2 + 1];
-        res.y = rightCone.DoesIntersect(sphere) ? 1 : 0;
-        return res;
+        return left | rightCone.DoesIntersect(sphere) ? RIGHT : NONE;
+    }
+};
+
+struct PartitionSideToUint2 {
+    __host__ __device__
+    uint2 operator()(const PartitionSide side) const {
+        return make_uint2(side & LEFT ? 1 : 0, 
+                          side & RIGHT ? 1 : 0);
     }
 };
 
@@ -297,6 +305,55 @@ void AddFinalLeftIndexToRightIndices(uint2* indices,
     uint2 lrIndex = indices[id];
     lrIndex.y += leftTotal;
     indices[id] = lrIndex;
+}
+
+__global__
+void PartitionIndices(const unsigned int* const indices,
+                      const unsigned int* const indexPartition,
+                      const PartitionSide* const partitionSides,
+                      const uint2* const leftRightIndices,
+                      const unsigned int nIndices,
+                      unsigned int* nextIndices,
+                      unsigned int* nextIndexPartition) {
+
+    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nIndices) return;
+
+    const PartitionSide side = partitionSides[id];
+    const uint2 leftRightIndex = leftRightIndices[id];
+    const unsigned int dataIndex = indices[id];
+    const unsigned int newPartition = indexPartition[id] * 2;
+    
+    if (side & LEFT) {
+        // Move the index left
+        const unsigned int leftIndex = leftRightIndex.x;
+        nextIndices[leftIndex] = dataIndex;
+        nextIndexPartition[leftIndex] = newPartition;
+    }
+
+    if (side & RIGHT) {
+        // Move the index right
+        const unsigned int rightIndex = leftRightIndex.y;
+        nextIndices[rightIndex] = dataIndex;
+        nextIndexPartition[rightIndex] = newPartition+1;
+    }
+}
+
+__global__
+void CreateNextPartitions(const uint2* const partitions,
+                          const uint2* const leftRightIndices,
+                          uint4* nextPartitions,
+                          const unsigned int nPartitions) {
+
+    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nPartitions) return;
+    
+    const uint2 partition = partitions[id];
+    const uint2 leftRightStart = leftRightIndices[partition.x];
+    const uint2 leftRightEnd = leftRightIndices[partition.y];
+    
+    nextPartitions[id] = make_uint4(leftRightStart.x, leftRightEnd.x,
+                                    leftRightStart.y, leftRightEnd.y);
 }
 
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
@@ -315,7 +372,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     // cout << "ray morton codes:\n" << rayMortonCodes << endl;
     
     rayContainer.SortToLeaves(rayMortonCodes.begin(), rayMortonCodes.end());
-
 
     // Reduce the 5D bounds along each dimension. These can be computed from the
     // sorted rays' morton code
@@ -352,24 +408,27 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     
     // Geometry partition
     
-    doneSpherePartitions = doneSphereIndices = 0;
-    while (spherePartitions.size() - doneSpherePartitions > 0) {
+    donePartitions = doneSphereIndices = 0;
+    while (spherePartitions.size() - donePartitions > 0) {
         // Create new ray partitions through binary search
-        nextRayPartitions.resize(rayPartitions.size() * 2);
+        const size_t activePartitions = rayPartitions.size() - donePartitions;
+        const size_t nextActivePartitions = activePartitions * 2;
+        const size_t nextPartitionSize = donePartitions + nextActivePartitions;
+        nextRayPartitions.resize(nextPartitionSize);
         struct cudaFuncAttributes funcAttr;
         cudaFuncGetAttributes(&funcAttr, FindNewRayPartitions);
         unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
         unsigned int blocks = (rayPartitions.size() / blocksize) + 1;
-        FindNewRayPartitions<<<blocks, blocksize>>>(RawPointer(rayPartitions), rayPartitions.size(),
+        FindNewRayPartitions<<<blocks, blocksize>>>(RawPointer(rayPartitions) + donePartitions, activePartitions,
                                                     RawPointer(rayMortonCodes),
-                                                    (uint4*)(void*)RawPointer(nextRayPartitions));
+                                                    (uint4*)(void*)RawPointer(nextRayPartitions) + donePartitions);
         std::cout << "nextRayPartitions:\n" << nextRayPartitions << std::endl;
 
         // Use the new partitions to approximate the left and right bounds for
         // ray partitions and split the geometry. TODO All of these
         // transformations below can be chained into one.
-        bounds.resize(bounds.size() * 2);
-        thrust::transform(nextRayPartitions.begin(), nextRayPartitions.end(), 
+        bounds.resize(nextActivePartitions);
+        thrust::transform(nextRayPartitions.begin() + donePartitions, nextRayPartitions.end(), 
                           bounds.begin(), CreateBoundsFromPartitions(rayMortonCodes));
         std::cout << "bounds:\n" << bounds << std::endl;
 
@@ -383,31 +442,82 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         std::cout << "cones:\n" << cones << std::endl;
 
         // Assign geometry to each childs cone and compute new indices for geometry moved left and right.
-        static thrust::device_vector<uint2> sphereLeftRightIndices(sphereIndices.size());
-        sphereLeftRightIndices[0] = make_uint2(0, 0);
-        sphereLeftRightIndices.resize(sphereIndices.size() - doneSphereIndices + 1); // +1 for dummy element
+        static thrust::device_vector<PartitionSide> spherePartitionSides(sphereIndices.size());
+        spherePartitionSides.resize(sphereIndices.size());
         thrust::transform(sphereIndices.begin() + doneSphereIndices, sphereIndices.end() + doneSphereIndices,
                           sphereIndexPartition.begin() + doneSphereIndices, 
-                          sphereLeftRightIndices.begin() + 1,
+                          spherePartitionSides.begin() ,
                           SpherePartitioningByCones(cones, spheres.spheres));
-        std::cout << "sphereLeftRightIndices:\n" << sphereLeftRightIndices << std::endl;
+        // cout << "spherePartitionSides:\n" << spherePartitionSides << endl;
 
-        thrust::inclusive_scan(sphereLeftRightIndices.begin() + 1, sphereLeftRightIndices.end(),
-                               sphereLeftRightIndices.begin() + 1);
+        static thrust::device_vector<uint2> sphereLeftRightIndices(sphereIndices.size());
+        sphereLeftRightIndices.resize(sphereIndices.size() - doneSphereIndices + 1); // +1 for dummy element
+        sphereLeftRightIndices[0] = make_uint2(0, 0);
+        thrust::transform_inclusive_scan(spherePartitionSides.begin(), spherePartitionSides.end(),
+                                         sphereLeftRightIndices.begin() + 1,
+                                         PartitionSideToUint2(),
+                                         thrust::plus<uint2>());
 
         cudaFuncGetAttributes(&funcAttr, AddFinalLeftIndexToRightIndices);
         blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
         blocks = (sphereLeftRightIndices.size() / blocksize) + 1;
         AddFinalLeftIndexToRightIndices<<<blocks, blocksize>>>(RawPointer(sphereLeftRightIndices),
                                                               RawPointer(sphereLeftRightIndices) + sphereLeftRightIndices.size()-1);
-        std::cout << "sphereLeftRightIndices:\n" << sphereLeftRightIndices << std::endl;
+        // cout << "sphereLeftRightIndices:\n" << sphereLeftRightIndices << endl;
 
+        // Partition sphere indices
+        const unsigned int activeSphereIndices = sphereIndices.size() - doneSphereIndices;
+        const unsigned int nextActiveSphereIndices = ((uint2)sphereLeftRightIndices[sphereLeftRightIndices.size()-1]).y;
+        nextSphereIndices.resize(doneSphereIndices + nextActiveSphereIndices); // done sphere indices to preserve already done indices at the front of the list.
+        nextSphereIndexPartition.resize(doneSphereIndices + nextActiveSphereIndices);
 
+        cudaFuncGetAttributes(&funcAttr, PartitionIndices);
+        blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+        blocks = (sphereLeftRightIndices.size() / blocksize) + 1;
+        
+        // cout << "sphereIndices:\n" << sphereIndices << endl;
+        // cout << "sphereIndexPartition:\n" << sphereIndexPartition << endl;
+        // cout << "notDoneSphereIndices:\n" << activeSphereIndices << endl;
+        // cout << "doneSphereIndices:\n" << doneSphereIndices << endl;
+        PartitionIndices<<<blocks, blocksize>>>(RawPointer(sphereIndices) + doneSphereIndices,
+                                                RawPointer(sphereIndexPartition) + doneSphereIndices,
+                                                RawPointer(spherePartitionSides),
+                                                RawPointer(sphereLeftRightIndices),
+                                                activeSphereIndices,
+                                                RawPointer(nextSphereIndices) + doneSphereIndices,
+                                                RawPointer(nextSphereIndexPartition) + doneSphereIndices);
+        CHECK_FOR_CUDA_ERROR();
 
+        // cout << "nextSphereIndices:\n" << nextSphereIndices << endl;
+        // cout << "nextSphereIndexPartition:\n" << nextSphereIndexPartition << endl;
+
+        sphereIndices.swap(nextSphereIndices);
+        sphereIndexPartition.swap(nextSphereIndexPartition);
+
+        // Create new sphere partitions
+        nextSpherePartitions.resize(nextPartitionSize);
+        cudaFuncGetAttributes(&funcAttr, CreateNextPartitions);
+        blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+        blocks = (sphereLeftRightIndices.size() / blocksize) + 1;
+        CreateNextPartitions<<<blocks, blocksize>>>(RawPointer(spherePartitions) + donePartitions,
+                                                    RawPointer(sphereLeftRightIndices),
+                                                    (uint4*)(void*)RawPointer(nextSpherePartitions) + donePartitions,
+                                                    activePartitions);
+        CHECK_FOR_CUDA_ERROR();
+        cout << "nextSpherePartitions:\n" << nextSpherePartitions << endl;
+
+        spherePartitions.swap(nextSpherePartitions);
         rayPartitions.swap(nextRayPartitions);
 
-        // Remove leafs
 
+
+        // *** Remove leafs ***
+        
+        // Locate done partitions
+        
+        // Compute nodewise partition indices
+        
+        // Partition sphere indices and copy done indices into the other indices array
 
         exit(0);
     }

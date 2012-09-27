@@ -25,12 +25,13 @@ class MortonDacrtNodes {
 
     thrust::device_vector<uint2> spherePartitions;
     thrust::device_vector<uint2> nextSpherePartitions;
-    unsigned int doneSpherePartitions;
+    unsigned int donePartitions;
 
     RayContainer* rays;
     thrust::device_vector<unsigned int> sphereIndices;
     thrust::device_vector<unsigned int> sphereIndexPartition;
     thrust::device_vector<unsigned int> nextSphereIndices;
+    thrust::device_vector<unsigned int> nextSphereIndexPartition;
     unsigned int doneSphereIndices;
 
 
