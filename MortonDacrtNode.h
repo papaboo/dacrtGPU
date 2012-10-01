@@ -25,14 +25,14 @@ class MortonDacrtNodes {
 
     thrust::device_vector<uint2> spherePartitions;
     thrust::device_vector<uint2> nextSpherePartitions;
-    unsigned int donePartitions;
+    unsigned int leafNodes;
 
     RayContainer* rays;
     thrust::device_vector<unsigned int> sphereIndices;
     thrust::device_vector<unsigned int> sphereIndexPartition;
     thrust::device_vector<unsigned int> nextSphereIndices;
     thrust::device_vector<unsigned int> nextSphereIndexPartition;
-    unsigned int doneSphereIndices;
+    unsigned int leafSphereIndices;
 
 
 public:
@@ -48,17 +48,32 @@ public:
      */
     void Create(RayContainer& rayContainer, SpheresGeometry& SphereContainer);
     
-    inline thrust::device_vector<uint2>::iterator BeginRayPartitions() { return rayPartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndRayPartitions() { return rayPartitions.end(); }
+    inline thrust::device_vector<uint2>::iterator RayPartitionsBegin() { return rayPartitions.begin(); }
+    inline thrust::device_vector<uint2>::iterator RayPartitionsEnd() { return rayPartitions.end(); }
+
+    inline thrust::device_vector<uint2>::iterator SpherePartitionsBegin() { return spherePartitions.begin(); }
+    inline thrust::device_vector<uint2>::iterator SpherePartitionsEnd() { return spherePartitions.end(); }
     
     std::string ToString() const;
 
 private:
+
+    /**
+     * Move leaf partitions to the front of the ray and sphere partition
+     * vectors, does the same for sphereIndices and sphereIndexPartition, and
+     * increment leafSphereIndices and leafNodes.
+     *
+     * Returns true if any new done nodes are created.
+     */
+    bool CreateLeafNodes();
     
     /**
      * Initializes sphereIndices and spherePartitions.
      */
     void InitSphereIndices(HyperCubes& cubes, SpheresGeometry& spheres);
+    
+    inline thrust::device_vector<uint2>::iterator ActiveSpherePartitionsBegin() { return spherePartitions.begin() + leafNodes; }
+    inline thrust::device_vector<uint2>::iterator ActiveSpherePartitionsEnd() { return spherePartitions.end(); }
 };
 
 inline std::ostream& operator<<(std::ostream& s, const MortonDacrtNodes& d){
