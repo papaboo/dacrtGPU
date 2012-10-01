@@ -50,6 +50,7 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   SphereContainer.cu
   SphereGeometry.h
   SphereGeometry.cu
+  Utils/Math.h
   Utils/Morton.h
   Utils/ToString.h
   Utils/Utils.h
