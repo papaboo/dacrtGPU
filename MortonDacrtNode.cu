@@ -22,7 +22,6 @@
 
 #include <iostream>
 
-#include <thrust/copy.h>
 #include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
@@ -744,7 +743,6 @@ bool MortonDacrtNodes::CreateLeafNodes() {
          RawPointer(nextSphereIndexPartition) + leafNodes + nNewLeafs); // next data owners
     CHECK_FOR_CUDA_ERROR();
 
-    /*    
     cudaMemcpy(RawPointer(sphereIndices) + leafSphereIndices,
                RawPointer(nextSphereIndices) + leafSphereIndices,
                sizeof(unsigned int) * nNewLeafIndices, cudaMemcpyDeviceToDevice);
@@ -753,16 +751,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
                RawPointer(nextSphereIndexPartition) + leafSphereIndices,
                sizeof(unsigned int) * nNewLeafIndices, cudaMemcpyDeviceToDevice);
     CHECK_FOR_CUDA_ERROR();
-    */
     
-    thrust::copy(nextSphereIndices.begin() + leafSphereIndices,
-                 nextSphereIndices.begin() + leafSphereIndices + nNewLeafIndices,
-                 sphereIndices.begin() + leafSphereIndices);
-    thrust::copy(nextSphereIndexPartition.begin() + leafSphereIndices,
-                 nextSphereIndexPartition.begin() + leafSphereIndices + nNewLeafIndices,
-                 sphereIndexPartition.begin() + leafSphereIndices);
-    CHECK_FOR_CUDA_ERROR();
-
     sphereIndices.swap(nextSphereIndices);
     sphereIndexPartition.swap(nextSphereIndexPartition);
 
