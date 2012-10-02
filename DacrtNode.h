@@ -72,16 +72,6 @@ public:
     inline RayContainer* GetRayContainer() { return rays; }
     inline SphereContainer* GetSphereIndices() { return sphereIndices; }
 
-    void Partition(RayContainer& rays, SphereContainer& spheres,
-                   HyperCubes& initialCubes);
-
-    /**
-     * Determines which nodes should be leafs and partitions the nodes, rays and spheres accordingly.
-     *
-     * Returns false if no leafnodes were found.
-     */
-    bool PartitionLeafs(RayContainer& rays, SphereContainer& spheres);
-
     /**
      * Takes a list of rays and geometry and intersects them by the partitioning
      * specified in the DacrtNodes.
@@ -92,16 +82,39 @@ public:
     void ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
                              thrust::device_vector<unsigned int>& hits);
 
+    inline thrust::device_vector<uint2>::iterator RayPartitionsBegin() { return doneRayPartitions.begin(); }
+    inline thrust::device_vector<uint2>::iterator RayPartitionsEnd() { return doneRayPartitions.end(); }
+    inline size_t DoneNodes() const { return doneRayPartitions.size(); }
+
+    /**
+     * TODO Partitions should be a begin and end iterator. Change it when I
+     * implement a custom kernel instead of using thrust's for_each.
+     */
+    static void CalcOwners(thrust::device_vector<uint2>::iterator beginPartition,
+                           thrust::device_vector<uint2>::iterator endPartition,
+                           thrust::device_vector<unsigned int>& owners);
+
+    std::string ToString() const;
+    std::string ToString(RayContainer& rays, SphereContainer& spheres) const;
+
+private:
+
+    void Partition(RayContainer& rays, SphereContainer& spheres,
+                   HyperCubes& initialCubes);
+
+    /**
+     * Determines which nodes should be leafs and partitions the nodes, rays and spheres accordingly.
+     *
+     * Returns false if no leafnodes were found.
+     */
+    bool PartitionLeafs(RayContainer& rays, SphereContainer& spheres);
+
     inline thrust::device_vector<uint2>::iterator BeginUnfinishedRayPartitions() { return rayPartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator EndUnfinishedRayPartitions() { return rayPartitions.end(); }
     inline thrust::device_vector<uint2>::iterator BeginUnfinishedSpherePartitions() { return spherePartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator EndUnfinishedSpherePartitions() { return spherePartitions.end(); }
     inline size_t UnfinishedNodes() const { return rayPartitions.size(); }
     void ResizeUnfinished(const size_t size);
-
-    inline thrust::device_vector<uint2>::iterator BeginDoneRayPartitions() { return doneRayPartitions.begin(); }
-    inline thrust::device_vector<uint2>::iterator EndDoneRayPartitions() { return doneRayPartitions.end(); }
-    inline size_t DoneNodes() const { return doneRayPartitions.size(); }
 
     inline DacrtNode GetUnfinished(const size_t i) const {
         return DacrtNode(rayPartitions[i], spherePartitions[i]);
@@ -116,16 +129,6 @@ public:
         return DacrtNode(doneRayPartitions[i], doneSpherePartitions[i]);
     }
 
-    /**
-     * TODO Partitions should be a begin and end iterator. Change it when I
-     * implement a custom kernel instead of using thrust's for_each.
-     */
-    static void CalcOwners(thrust::device_vector<uint2>::iterator beginPartition,
-                           thrust::device_vector<uint2>::iterator endPartition,
-                           thrust::device_vector<unsigned int>& owners);
-
-    std::string ToString() const;
-    std::string ToString(RayContainer& rays, SphereContainer& spheres) const;
 };
 
 inline std::ostream& operator<<(std::ostream& s, const DacrtNodes& d){
