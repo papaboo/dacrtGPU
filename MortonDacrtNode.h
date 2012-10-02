@@ -47,6 +47,10 @@ public:
      * Partitions the rays and spheres into smaller partitions for ray tracing.
      */
     void Create(RayContainer& rayContainer, SpheresGeometry& SphereContainer);
+
+    inline RayContainer* GetRayContainer() { return rays; }
+    inline thrust::device_vector<unsigned int>::iterator SphereIndicesBegin() { return sphereIndices.begin(); }
+    inline thrust::device_vector<unsigned int>::iterator SphereIndicesEnd() { return sphereIndices.end(); }
     
     inline thrust::device_vector<uint2>::iterator RayPartitionsBegin() { return rayPartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator RayPartitionsEnd() { return rayPartitions.end(); }
