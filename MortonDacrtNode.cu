@@ -973,7 +973,7 @@ std::string MortonDacrtNodes::PrintNode(const unsigned int i, const bool verbose
 
         out << "\n  Spheres: [";
         for (int s = spherePartition.x; s < spherePartition.y; ++s) {
-            out << sphereIndices[s];
+            out << sphereIndices[s] << " (" << sphereIndexPartition[s] << ")";
             if (s < spherePartition.y-1) 
                 out << ", ";
             else 
