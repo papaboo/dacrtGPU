@@ -190,7 +190,7 @@ __global__
 void FindNewRayPartitions(const uint2* const rayPartitions,
                           const unsigned int rayPartitionCount,
                           const unsigned int* const rayMortonCodes,
-                          uint4* nextRayPartitions) {
+                          uint2* nextRayPartitions) {
     
     const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
     
@@ -214,8 +214,8 @@ void FindNewRayPartitions(const uint2* const rayPartitions,
         pivot.y = value < rightMin ? pivot.y : mid;
     }
     
-    nextRayPartitions[id] = make_uint4(partition.x, pivot.x,
-                                       pivot.x, partition.y);
+    nextRayPartitions[id*2]   = make_uint2(partition.x, pivot.x);
+    nextRayPartitions[id*2+1] = make_uint2(pivot.x, partition.y);
 }
 
 struct CreateBoundsFromPartitions {
@@ -404,7 +404,7 @@ void AddFinalLeftIndexToRightIndices(uint2* indices,
 __global__
 void CreateNextPartitionings(const uint2* const partitionings, // active partitionings
                              const unsigned int* const newEntries,
-                             uint4* nextPartitionings, // result
+                             uint2* nextPartitionings, // result
                              const unsigned int nLeafIndices,
                              const unsigned int nActiveNodes) {
 
@@ -413,14 +413,14 @@ void CreateNextPartitionings(const uint2* const partitionings, // active partiti
 
     const uint2 partitioning = partitionings[id];
     const unsigned int leftEntry = (partitioning.x - nLeafIndices) * 2;
-    const unsigned int leftBegin = newEntries[leftEntry];
+    const unsigned int leftBegin = newEntries[leftEntry] + nLeafIndices;
     const unsigned int rightEntry = leftEntry + (partitioning.y - partitioning.x);
-    const unsigned int rightBegin = newEntries[rightEntry];
+    const unsigned int rightBegin = newEntries[rightEntry] + nLeafIndices;
     const unsigned int endEntry = rightEntry + (partitioning.y - partitioning.x);
-    const unsigned int rightEnd = newEntries[endEntry];
+    const unsigned int rightEnd = newEntries[endEntry] + nLeafIndices;
     
-    nextPartitionings[id] = make_uint4(leftBegin, rightBegin,
-                                       rightBegin, rightEnd);
+    nextPartitionings[id*2]   = make_uint2(leftBegin, rightBegin);
+    nextPartitionings[id*2+1] = make_uint2(rightBegin, rightEnd);
 }
 
 
@@ -494,7 +494,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         unsigned int blocks = (rayPartitions.size() / blocksize) + 1;
         FindNewRayPartitions<<<blocks, blocksize>>>(RawPointer(rayPartitions) + leafNodes, activeNodes,
                                                     RawPointer(rayMortonCodes),
-                                                    (uint4*)(void*)RawPointer(nextRayPartitions) + leafNodes);
+                                                    RawPointer(nextRayPartitions) + leafNodes);
         //std::cout << "nextRayPartitions:\n" << nextRayPartitions << std::endl;
 
         // std::cout << "nextRayPartitions:\n" << std::endl;
@@ -608,11 +608,18 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         nextSpherePartitions.resize(nextPartitionSize);
         cudaFuncGetAttributes(&funcAttr, CreateNextPartitionings);
         blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-        blocks = (spherePartitions.size() / blocksize) + 1;
+        blocks = (activeNodes / blocksize) + 1;
+        
+        cout << "CreateNextPartitionings<<<" << blocks << ", " << blocksize << ">>>" << endl;
+        cout << "spherePartitions:\n" << spherePartitions << endl;
+        cout << "sphereLeftRightEntries:\n" << sphereLeftRightEntries << endl;
+        cout << "nLeafSphereIndices: " << leafSphereIndices << endl;
+        cout << "nActiveNodes: " << activeNodes << endl;
+        cout << "nLeafNodes: " << leafNodes << endl;
         CreateNextPartitionings<<<blocks, blocksize>>>
             (RawPointer(spherePartitions) + leafNodes,
              RawPointer(sphereLeftRightEntries),
-             (uint4*)(RawPointer(nextSpherePartitions) + leafNodes),
+             RawPointer(nextSpherePartitions) + leafNodes,
              leafSphereIndices, activeNodes);
         CHECK_FOR_CUDA_ERROR();
         cout << "nextSpherePartitions:\n" << nextSpherePartitions << endl;
@@ -620,11 +627,12 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         spherePartitions.swap(nextSpherePartitions);
         rayPartitions.swap(nextRayPartitions);
 
-        cout << ToString(true) << endl;
+        cout << "\n ** Before Leaf removal **\n" << ToString(true) << endl;
 
         // *** Remove leafs ***
-        // CreateLeafNodes();        
-        // exit(0);
+        CreateLeafNodes();        
+
+        cout << "\n ** After Leaf removal **\n" << ToString(true) << endl;
     }
 
     CHECK_FOR_CUDA_ERROR();
@@ -710,13 +718,13 @@ void PartitionLeafIndices(const unsigned int* const indices, // starts at the fi
                           const unsigned int nNewLeafIndices, // 
                           const unsigned int nOldLeafs, // number of leafs prior to checking for new ones.
                           const unsigned int nNewLeafs, // number of new leafs
+                          // Results
                           unsigned int* leafIndices,
                           unsigned int* leafOwners,
                           unsigned int* nextIndices,
                           unsigned int* nextOwners) {
 
     const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
-    
     if (id >= nActiveIndices) return;
 
     // Owners are global, so it's minus the number of leaves to get the owner of
@@ -727,13 +735,13 @@ void PartitionLeafIndices(const unsigned int* const indices, // starts at the fi
     const bool leaf = isLeaf[owner];
 
     // Compute the new index of the data
-    const unsigned int partitionStartIndex = leaf ? 
+    const unsigned int partitioningBegin = leaf ? 
         leafStartIndex[owner] :
         partition.x - nNewLeafIndices;
     // Since id's index into active data and partitions contain global indices,
     // we need to add nOldLeafIndices.
     const unsigned int partitionOffset = id + nOldLeafIndices - partition.x;
-    const unsigned int dataIndex = partitionStartIndex + partitionOffset;
+    const unsigned int dataIndex = partitioningBegin + partitionOffset;
     
     unsigned int* newIndices = leaf ? leafIndices : nextIndices;
     newIndices[dataIndex] = indices[id];
@@ -754,24 +762,27 @@ void PartitionLeafIndices(const unsigned int* const indices, // starts at the fi
 
 bool MortonDacrtNodes::CreateLeafNodes() {
     
-    const size_t activeNodes = spherePartitions.size() - leafNodes;
-    const size_t activeSphereIndices = sphereIndices.size() - leafSphereIndices;
+    const size_t nActiveNodes = spherePartitions.size() - leafNodes;
+    const size_t nActiveSphereIndices = sphereIndices.size() - leafSphereIndices;
     
-    cout << "\n --- Create leaf nodes from " << activeNodes << " active nodes and " << activeSphereIndices << " active sphere indices. ---\n" << endl;
+    cout << "\n --- Create leaf nodes from " << nActiveNodes << " active nodes and " << nActiveSphereIndices << " active sphere indices. ---\n" << endl;
 
     // Locate leaf partitions
-    static thrust::device_vector<bool> isLeaf(activeNodes);
-    isLeaf.resize(activeNodes);
+    static thrust::device_vector<bool> isLeaf(nActiveNodes);
+    isLeaf.resize(nActiveNodes);
 
     // TODO make isLeaf unsigned int and reuse for indices? isLeaf info is
     // stored in an index and it's neighbour.
     thrust::transform(rayPartitions.begin() + leafNodes, rayPartitions.end(),
                       spherePartitions.begin() + leafNodes,
                       isLeaf.begin(), IsNodeLeaf());
+
+    isLeaf[0] = false; // LOL H4X0RS. Remove once I've tested that it works.
+    
     cout << "isLeaf:\n" << isLeaf << endl;    
 
-    static thrust::device_vector<unsigned int> leafNodeIndices(activeNodes+1);
-    leafNodeIndices.resize(activeNodes+1);
+    static thrust::device_vector<unsigned int> leafNodeIndices(nActiveNodes+1);
+    leafNodeIndices.resize(nActiveNodes+1);
     leafNodeIndices[0] = 0;
     thrust::transform_inclusive_scan(isLeaf.begin(), isLeaf.end(), leafNodeIndices.begin()+1, 
                                      BoolToInt(), thrust::plus<unsigned int>());
@@ -785,14 +796,13 @@ bool MortonDacrtNodes::CreateLeafNodes() {
         return false;
     }
 
-    
     // Compute start index for geometric primitives in done nodes.
-    static thrust::device_vector<unsigned int> leafSpheresStartIndex(activeNodes+1);
-    leafSpheresStartIndex.resize(activeNodes+1);
+    static thrust::device_vector<unsigned int> leafSpheresStartIndex(nActiveNodes+1);
+    leafSpheresStartIndex.resize(nActiveNodes+1);
     leafSpheresStartIndex[0] = 0;
     thrust::zip_iterator<thrust::tuple<BoolIterator, Uint2Iterator> > leafNodeValues = 
         thrust::make_zip_iterator(thrust::make_tuple(isLeaf.begin(), ActiveSpherePartitionsBegin()));
-    thrust::transform_inclusive_scan(leafNodeValues, leafNodeValues + activeNodes, 
+    thrust::transform_inclusive_scan(leafNodeValues, leafNodeValues + nActiveNodes, 
                                      leafSpheresStartIndex.begin()+1, MarkLeafSize(), 
                                      thrust::plus<unsigned int>());
     cout << "leafSpheresStartIndex:\n" << leafSpheresStartIndex << endl;
@@ -810,7 +820,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     struct cudaFuncAttributes funcAttr;
     cudaFuncGetAttributes(&funcAttr, PartitionLeafIndices);
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-    unsigned int blocks = (activeSphereIndices / blocksize) + 1;
+    unsigned int blocks = (nActiveSphereIndices / blocksize) + 1;
     PartitionLeafIndices<<<blocks, blocksize>>>
         (RawPointer(sphereIndices) + leafSphereIndices, // starts at the first active index
          RawPointer(sphereIndexPartition) + leafSphereIndices, // starts at the first active owner
@@ -818,7 +828,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
          RawPointer(isLeaf),
          RawPointer(leafSpheresStartIndex),
          RawPointer(leafNodeIndices),
-         activeSphereIndices, // Currently active data indices
+         nActiveSphereIndices, // Currently active data indices
          leafSphereIndices, // number of old data points that have been moved to leafs
          nNewLeafIndices,
          leafNodes, // number of leafs prior to checking for new ones.
@@ -851,7 +861,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     
     cudaFuncGetAttributes(&funcAttr, PartitionNewLeafNodes);
     blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-    blocks = (activeNodes / blocksize) + 1;
+    blocks = (nActiveNodes / blocksize) + 1;
     PartitionNewLeafNodes<<<blocks, blocksize>>>
         (RawPointer(rayPartitions) + leafNodes,
          RawPointer(spherePartitions) + leafNodes,
@@ -860,7 +870,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
          RawPointer(leafSpheresStartIndex),
          RawPointer(nextRayPartitions) + leafNodes,
          RawPointer(nextSpherePartitions) + leafNodes,
-         activeNodes,
+         nActiveNodes,
          nNewLeafs,
          leafSphereIndices,
          nNewLeafIndices);
@@ -880,8 +890,6 @@ bool MortonDacrtNodes::CreateLeafNodes() {
 
     spherePartitions.swap(nextSpherePartitions);
     rayPartitions.swap(nextRayPartitions);
-
-    cout << "SPHERE PARTITION DOESN'T WORK. LOOK AT THE LAST NODE!" << endl;
 
     cout << "new spherePartitions:\n" << spherePartitions << endl;
     cout << "new rayPartitions:\n" << rayPartitions << endl;
@@ -934,6 +942,7 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
     spherePartitions.resize(cubes.Size());
     thrust::copy(h_spherePartitions.begin(), h_spherePartitions.end(), spherePartitions.begin());
 }
+
 
 std::string MortonDacrtNodes::ToString(const bool verbose) const {
     std::ostringstream out;
