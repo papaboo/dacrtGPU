@@ -186,7 +186,8 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
     thrust::sort_by_key(keysBegin, keysEnd, BeginInnerRays());
 
     // TODO This will be a lot faster once leafs are just the first 'n' rays in innerRays.
-    leafRays = innerRays;
+    leafRays.Swap(innerRays);
+    innerRays.Resize(0);
 }
 
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
