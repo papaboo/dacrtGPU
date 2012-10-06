@@ -28,6 +28,7 @@ class MortonDacrtNodes {
     unsigned int leafNodes;
 
     RayContainer* rays;
+    SpheresGeometry* spheresGeom;
     thrust::device_vector<unsigned int> sphereIndices;
     thrust::device_vector<unsigned int> sphereIndexPartition;
     thrust::device_vector<unsigned int> nextSphereIndices;
@@ -58,7 +59,7 @@ public:
     inline thrust::device_vector<uint2>::iterator SpherePartitionsBegin() { return spherePartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator SpherePartitionsEnd() { return spherePartitions.end(); }
     
-    std::string ToString() const;
+    std::string ToString(const bool verbose = false) const;
 
 private:
 
@@ -78,6 +79,8 @@ private:
     
     inline thrust::device_vector<uint2>::iterator ActiveSpherePartitionsBegin() { return spherePartitions.begin() + leafNodes; }
     inline thrust::device_vector<uint2>::iterator ActiveSpherePartitionsEnd() { return spherePartitions.end(); }
+    
+    std::string PrintNode(const unsigned int id, const bool verbose = false) const;
 };
 
 inline std::ostream& operator<<(std::ostream& s, const MortonDacrtNodes& d){
