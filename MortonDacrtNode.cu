@@ -423,57 +423,6 @@ void CreateNextPartitionings(const uint2* const partitionings, // active partiti
                                        rightBegin, rightEnd);
 }
 
-/*
-__global__
-void PartitionIndices(const unsigned int* const indices,
-                      const unsigned int* const indexPartition,
-                      const PartitionSide* const partitionSides,
-                      const uint2* const leftRightIndices,
-                      const unsigned int nIndices,
-                      unsigned int* nextIndices,
-                      unsigned int* nextIndexPartition) {
-
-    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (id >= nIndices) return;
-
-    const PartitionSide side = partitionSides[id];
-    const uint2 leftRightIndex = leftRightIndices[id];
-    const unsigned int dataIndex = indices[id];
-    const unsigned int newPartition = indexPartition[id] * 2;
-    
-    if (side & LEFT) {
-        // Move the index left
-        const unsigned int leftIndex = leftRightIndex.x;
-        nextIndices[leftIndex] = dataIndex;
-        nextIndexPartition[leftIndex] = newPartition;
-    }
-
-    if (side & RIGHT) {
-        // Move the index right
-        const unsigned int rightIndex = leftRightIndex.y;
-        nextIndices[rightIndex] = dataIndex;
-        nextIndexPartition[rightIndex] = newPartition+1;
-    }
-}
-
-__global__
-void CreateNextPartitions(const uint2* const partitions,
-                          const uint2* const leftRightIndices,
-                          uint4* nextPartitions,
-                          const unsigned int nPartitions) {
-
-    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
-    if (id >= nPartitions) return;
-    
-    const uint2 partition = partitions[id];
-    const uint2 leftRightStart = leftRightIndices[partition.x];
-    const uint2 leftRightEnd = leftRightIndices[partition.y];
-    
-    nextPartitions[id] = make_uint4(leftRightStart.x, leftRightEnd.x,
-                                    leftRightStart.y, leftRightEnd.y);
-}
-*/
-
 
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
     rays = &rayContainer;
