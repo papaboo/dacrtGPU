@@ -36,6 +36,7 @@ public:
     inline Rays::Iterator BeginLeafRays() { return leafRays.Begin(); }
     inline Rays::Iterator EndLeafRays() { return leafRays.End(); }
     inline unsigned int LeafRays() const { return leafRays.Size(); }
+    inline Ray GetLeafRay(const size_t r) const { return leafRays.GetAsRay(r); }
 
     /**
      * Converts the rays to a hyperray representation.
