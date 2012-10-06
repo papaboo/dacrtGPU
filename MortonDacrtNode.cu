@@ -622,25 +622,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
 
         cout << ToString(true) << endl;
 
-
-        /*
-        nextSpherePartitions.resize(nextPartitionSize);
-        cudaFuncGetAttributes(&funcAttr, CreateNextPartitions);
-        blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-        blocks = (sphereLeftRightEntries.size() / blocksize) + 1;
-        CreateNextPartitions<<<blocks, blocksize>>>(RawPointer(spherePartitions) + leafNodes,
-                                                    RawPointer(sphereLeftRightEntries),
-                                                    (uint4*)(void*)RawPointer(nextSpherePartitions) + leafNodes,
-                                                    activeNodes);
-        CHECK_FOR_CUDA_ERROR();
-        cout << "nextSpherePartitions:\n" << nextSpherePartitions << endl;
-
-        spherePartitions.swap(nextSpherePartitions);
-        rayPartitions.swap(nextRayPartitions);
-
-        cout << ToString(true) << endl;
-        */
-        
         // *** Remove leafs ***
         // CreateLeafNodes();        
         // exit(0);
