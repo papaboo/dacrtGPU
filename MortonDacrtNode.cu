@@ -8,6 +8,7 @@
 
 #include <MortonDacrtNode.h>
 
+#include <DacrtNode.h>
 #include <HyperCubes.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <Meta/CUDA.h>
@@ -479,7 +480,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     
     leafNodes = leafSphereIndices = 0;
     int counter = 0;
-    while (spherePartitions.size() - leafNodes > 0 && counter < 2) {
+    while (spherePartitions.size() - leafNodes > 0) {
         ++counter;
         cout << "\n *** ROUND " << counter << " - FIGHT ***\n" << endl;
 
@@ -504,7 +505,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         bounds.resize(nextActiveNodes);
         thrust::transform(nextRayPartitions.begin() + leafNodes, nextRayPartitions.end(), 
                           bounds.begin(), CreateBoundsFromPartitions(rayMortonCodes));
-        std::cout << "bounds:\n" << bounds << std::endl;
+        // std::cout << "bounds:\n" << bounds << std::endl;
 
         static HyperCubes hyperCubes(128); hyperCubes.Resize(bounds.size());
         thrust::transform(bounds.begin(), bounds.end(), 
@@ -544,7 +545,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
                                          thrust::plus<unsigned int>());        
         
         const unsigned int nNextActiveSpheres = sphereLeftRightEntries[sphereLeftRightEntries.size()-1];
-        cout << "nNextActiveSpheres: " << nNextActiveSpheres << endl;
+        // cout << "nNextActiveSpheres: " << nNextActiveSpheres << endl;
 
         /*
           // Is this faster and does it work with spatially coherent partitioning?
@@ -602,19 +603,13 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
         blocks = (activeNodes / blocksize) + 1;
         
-        cout << "CreateNextPartitionings<<<" << blocks << ", " << blocksize << ">>>" << endl;
-        cout << "spherePartitions:\n" << spherePartitions << endl;
-        cout << "sphereLeftRightEntries:\n" << sphereLeftRightEntries << endl;
-        cout << "nLeafSphereIndices: " << leafSphereIndices << endl;
-        cout << "nActiveNodes: " << activeNodes << endl;
-        cout << "nLeafNodes: " << leafNodes << endl;
         CreateNextPartitionings<<<blocks, blocksize>>>
             (RawPointer(spherePartitions) + leafNodes,
              RawPointer(sphereLeftRightEntries),
              RawPointer(nextSpherePartitions) + leafNodes,
              leafSphereIndices, activeNodes);
         CHECK_FOR_CUDA_ERROR();
-        cout << "nextSpherePartitions:\n" << nextSpherePartitions << endl;
+        // cout << "nextSpherePartitions:\n" << nextSpherePartitions << endl;
 
         spherePartitions.swap(nextSpherePartitions);
         rayPartitions.swap(nextRayPartitions);
@@ -632,17 +627,18 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     // Compute bounds of geometry partitions and do coarse level ray elimination
     // before intersection.
 
-    cout << "\n *** GORELESS VICTORY ***\n" << endl;
+    // cout << "\n *** GORELESS VICTORY ***\n" << endl;
 }
 
 
-struct IsNodeLeaf {
+struct MortonIsNodeLeaf {
     __host__ __device__
     bool operator()(const uint2 rayPartition, const uint2 spherePartition) const {
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
         const float sphereCount = (float)(spherePartition.y - spherePartition.x);
         
-        return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
+        // return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
+        return rayCount * sphereCount <= 6.0f * (rayCount + sphereCount);
     }
 };
 
@@ -712,7 +708,8 @@ void PartitionLeafIndices(const unsigned int* const indices,
                           const unsigned int nNewLeafs, // number of new leafs
                           // Results
                           unsigned int* nextIndices,
-                          unsigned int* nextOwners) {
+                          unsigned int* nextOwners,
+                          unsigned int* DEBUG) {
 
     unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
     if (id >= nActiveIndices) return;
@@ -728,13 +725,15 @@ void PartitionLeafIndices(const unsigned int* const indices,
 
     // Compute the new index of the data
     const unsigned int partitioningBegin = leaf ? 
-        leafSphereBeginEntries[owner] + nOldLeafIndices: 
-        partitioning.x + nNewLeafIndices;
+        leafSphereBeginEntries[owner] + nOldLeafIndices : 
+        partitioning.x + nNewLeafIndices - leafSphereBeginEntries[owner];
 
     // Offset of the data in the partitioning relative to the beginning.
     const unsigned int offset = id - partitioning.x;
     const unsigned int newEntry = partitioningBegin + offset;
     
+    DEBUG[id-nOldLeafIndices] = newEntry;
+
     nextIndices[newEntry] = indices[id];
 
     // Compute the new owner of the data. If it has been moved to a leaf node,
@@ -745,7 +744,7 @@ void PartitionLeafIndices(const unsigned int* const indices,
     // how's that for documentation!
     unsigned int newOwner = leaf ? 
         leafNodeIndices[owner] + nOldLeafs : 
-        owner + nOldLeafs + nNewLeafs;
+        owner + nOldLeafs + nNewLeafs - leafNodeIndices[owner]; // TODO Move newOwner and partitioningbegin calculations into own kernel parallized over nodes? Costs extra memory, but should be faster.
         
     nextOwners[newEntry] = newOwner;
 }
@@ -765,7 +764,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     // stored in an index and it's neighbour.
     thrust::transform(rayPartitions.begin() + leafNodes, rayPartitions.end(),
                       spherePartitions.begin() + leafNodes,
-                      isLeaf.begin(), IsNodeLeaf());
+                      isLeaf.begin(), MortonIsNodeLeaf());
     cout << "isLeaf:\n" << isLeaf << endl;    
 
     static thrust::device_vector<unsigned int> leafNodeIndices(nActiveNodes+1);
@@ -773,13 +772,13 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     leafNodeIndices[0] = 0;
     thrust::transform_inclusive_scan(isLeaf.begin(), isLeaf.end(), leafNodeIndices.begin()+1, 
                                      BoolToInt(), thrust::plus<unsigned int>());
-    cout << "leafNodeIndices:\n" << leafNodeIndices << endl;
+    cout << "leafNodeEntries:\n" << leafNodeIndices << endl;
     const size_t nNewLeafs = leafNodeIndices[leafNodeIndices.size()-1];
     cout << "nNewLeafs: " << nNewLeafs << endl;
     
 
     if (nNewLeafs == 0) { 
-        cout << "No new leafs" << endl;
+        // cout << "No new leafs" << endl;
         return false;
     }
 
@@ -792,7 +791,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     thrust::transform_inclusive_scan(leafNodeValues, leafNodeValues + nActiveNodes, 
                                      leafSpheresStartIndex.begin()+1, MarkLeafSize(), 
                                      thrust::plus<unsigned int>());
-    cout << "leafSpheresStartIndex:\n" << leafSpheresStartIndex << endl;
+    cout << "leafSpheresBeginEntries:\n" << leafSpheresStartIndex << endl;
     const size_t nNewLeafIndices = leafSpheresStartIndex[leafSpheresStartIndex.size() - 1];
     cout << "nNewLeafIndices: " << nNewLeafIndices << endl;
 
@@ -804,6 +803,8 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     nextSphereIndices.resize(nSphereIndices);
     nextSphereIndexPartition.resize(nSphereIndices);
     
+    thrust::device_vector<unsigned int> DEBUG(nActiveSphereIndices);
+
     struct cudaFuncAttributes funcAttr;
     cudaFuncGetAttributes(&funcAttr, PartitionLeafIndices);
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
@@ -822,8 +823,11 @@ bool MortonDacrtNodes::CreateLeafNodes() {
          nNewLeafs, // number of new leafs
          // results
          RawPointer(nextSphereIndices),
-         RawPointer(nextSphereIndexPartition));
+         RawPointer(nextSphereIndexPartition),
+         RawPointer(DEBUG));
     CHECK_FOR_CUDA_ERROR();
+
+    cout << "DEBUG:\n" << DEBUG << endl;
 
     // Copy new leaf geometry indices back into the old array to maintain a
     // complete list of leafs indices in both arrays (TODO only copy to the main
@@ -877,16 +881,80 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     spherePartitions.swap(nextSpherePartitions);
     rayPartitions.swap(nextRayPartitions);
 
-    cout << "new spherePartitions:\n" << spherePartitions << endl;
-    cout << "new rayPartitions:\n" << rayPartitions << endl;
+    // cout << "new spherePartitions:\n" << spherePartitions << endl;
+    // cout << "new rayPartitions:\n" << rayPartitions << endl;
     
 
     leafSphereIndices += nNewLeafIndices;
     leafNodes += nNewLeafs;
-    cout << "new leaf count: " << leafNodes << endl;
-    cout << "leafSphereIndices:\n" << leafSphereIndices << endl;
+    // cout << "new leaf count: " << leafNodes << endl;
+    // cout << "leafSphereIndices:\n" << leafSphereIndices << endl;
 
     return true;
+}
+
+
+__global__
+void ExhaustiveIntersection(const float4* const rayOrigins, 
+                            float4* rayDirs,
+                            const unsigned int* const nodes,
+                            const uint2* const spherePartitionings,
+                            const unsigned int* const sphereIndices,
+                            const Sphere* const spheres,
+                            const unsigned int nRays,
+                            unsigned int *hitIDs) {
+    
+    unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nRays) return;
+
+    const unsigned int node = nodes[id];
+
+    const float3 origin = make_float3(rayOrigins[id]);
+    const float3 dir = make_float3(rayDirs[id]);
+        
+    const uint2 spherePartitioning = spherePartitionings[node];
+    float hitT = 1e30f;
+    unsigned int hitID = SpheresGeometry::MISSED;
+    
+    for (unsigned int g = spherePartitioning.x; g < spherePartitioning.y; ++g) {
+        const unsigned int sphereId = sphereIndices[g];
+        const Sphere s = spheres[sphereId];
+        const float t = s.Intersect(origin, dir);
+        if (0 < t && t < hitT) {
+            hitID = sphereId;
+            hitT = t;
+        }
+    }
+    
+    rayDirs[id] = make_float4(dir, hitT);
+    hitIDs[id] = hitID;
+}
+
+void MortonDacrtNodes::FindIntersections(thrust::device_vector<unsigned int>& hitIDs) {
+    const unsigned int nActiveRays = rays->LeafRays();
+    hitIDs.resize(nActiveRays);
+    
+    // Compute which nodes each ray belongs to. This should be done using work
+    // queues on high end cards.
+    static thrust::device_vector<unsigned int> owners(nActiveRays);
+    owners.resize(nActiveRays);
+    DacrtNodes::CalcOwners(RayPartitionsBegin(), RayPartitionsEnd(), owners);
+
+    // Perform exhaustive intersection.
+    struct cudaFuncAttributes funcAttr;
+    cudaFuncGetAttributes(&funcAttr, ExhaustiveIntersection);
+    unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    unsigned int blocks = (nActiveRays / blocksize) + 1;
+    ExhaustiveIntersection<<<blocks, blocksize>>>
+        (RawPointer(Rays::GetOrigins(rays->BeginLeafRays())),
+         RawPointer(Rays::GetDirections(rays->BeginLeafRays())),
+         RawPointer(owners),
+         RawPointer(spherePartitions),
+         RawPointer(sphereIndices),
+         RawPointer(spheresGeom->spheres),
+         nActiveRays,
+         RawPointer(hitIDs));
+    CHECK_FOR_CUDA_ERROR();
 }
 
 
