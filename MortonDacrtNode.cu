@@ -497,14 +497,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
                                                     RawPointer(nextRayPartitions) + leafNodes);
         //std::cout << "nextRayPartitions:\n" << nextRayPartitions << std::endl;
 
-        // std::cout << "nextRayPartitions:\n" << std::endl;
-        // for (int i = 0; i < nextRayPartitions.size(); ++i) {
-        //     uint2 partition = nextRayPartitions[i];
-        //     unsigned int min = rayMortonCodes[partition.x];
-        //     unsigned int max = rayMortonCodes[partition.y-1];
-        //     cout << i << ": " << partition << ", min: " << Bitmap(min) << ", max: " << Bitmap(max) << endl;
-        // }
-        
 
         // Use the new partitions to approximate the left and right bounds for
         // ray partitions and split the geometry. TODO All of these
@@ -666,17 +658,17 @@ struct MarkLeafSize {
 };
 
 __global__
-void PartitionNewLeafNodes(const uint2* const rayPartitions,
-                           const uint2* const spherePartitions,
-                           const bool* isLeafNode,
-                           const unsigned int* leafNodeIndices,
-                           const unsigned int* newSpherePartitionBegins,
-                           uint2* nextRayPartitions,
-                           uint2* nextSpherePartitions,
-                           const unsigned int nActiveNodes,
-                           const unsigned int nNewLeafs,
-                           const unsigned int nOldLeafSphereIndices,
-                           const unsigned int nNewLeafSphereIndices) {
+void CreateNewLeafNodes(const uint2* const rayPartitions,
+                        const uint2* const spherePartitions,
+                        const bool* isLeafNode,
+                        const unsigned int* leafNodeIndices,
+                        const unsigned int* newSpherePartitionBegins,
+                        uint2* nextRayPartitions,
+                        uint2* nextSpherePartitions,
+                        const unsigned int nActiveNodes,
+                        const unsigned int nNewLeafs,
+                        const unsigned int nOldLeafSphereIndices,
+                        const unsigned int nNewLeafSphereIndices) {
 
     const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
     
@@ -707,11 +699,11 @@ void PartitionNewLeafNodes(const uint2* const rayPartitions,
  * | ... old inactive data ... | ... new inactive  data ... | ... still active data ... |
  */
 __global__
-void PartitionLeafIndices(const unsigned int* const indices, // starts at the first active index
-                          const unsigned int* const owners, // starts at the first active owner
+void PartitionLeafIndices(const unsigned int* const indices,
+                          const unsigned int* const owners,
                           const uint2* const nodePartitions, // starts at the first active partition
                           const bool* const isLeaf,
-                          const unsigned int* const leafStartIndex,
+                          const unsigned int* const leafSphereBeginEntries,
                           const unsigned int* const leafNodeIndices,
                           const unsigned int nActiveIndices, // Currently active data indices
                           const unsigned int nOldLeafIndices, // number of old data points that have been moved to leafs
@@ -719,32 +711,31 @@ void PartitionLeafIndices(const unsigned int* const indices, // starts at the fi
                           const unsigned int nOldLeafs, // number of leafs prior to checking for new ones.
                           const unsigned int nNewLeafs, // number of new leafs
                           // Results
-                          unsigned int* leafIndices,
-                          unsigned int* leafOwners,
                           unsigned int* nextIndices,
                           unsigned int* nextOwners) {
 
-    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
     if (id >= nActiveIndices) return;
+    
+    id += nOldLeafIndices;
 
     // Owners are global, so it's minus the number of leaves to get the owner of
     // the active indices.
     const unsigned int owner = owners[id] - nOldLeafs;
-    const uint2 partition = nodePartitions[owner];
+    const uint2 partitioning = nodePartitions[owner];
     
     const bool leaf = isLeaf[owner];
 
     // Compute the new index of the data
     const unsigned int partitioningBegin = leaf ? 
-        leafStartIndex[owner] :
-        partition.x - nNewLeafIndices;
-    // Since id's index into active data and partitions contain global indices,
-    // we need to add nOldLeafIndices.
-    const unsigned int partitionOffset = id + nOldLeafIndices - partition.x;
-    const unsigned int dataIndex = partitioningBegin + partitionOffset;
+        leafSphereBeginEntries[owner] + nOldLeafIndices: 
+        partitioning.x + nNewLeafIndices;
+
+    // Offset of the data in the partitioning relative to the beginning.
+    const unsigned int offset = id - partitioning.x;
+    const unsigned int newEntry = partitioningBegin + offset;
     
-    unsigned int* newIndices = leaf ? leafIndices : nextIndices;
-    newIndices[dataIndex] = indices[id];
+    nextIndices[newEntry] = indices[id];
 
     // Compute the new owner of the data. If it has been moved to a leaf node,
     // then the new owner is the addition of the number of old leafs and the
@@ -752,12 +743,11 @@ void PartitionLeafIndices(const unsigned int* const indices, // starts at the fi
     // leaf, then it is the old node index minus the number of new leafs created
     // (plus the number of old leaf nodes that was subtracted earlier). Now
     // how's that for documentation!
-    unsigned int* newOwners = leaf ? leafOwners : nextOwners;
     unsigned int newOwner = leaf ? 
         leafNodeIndices[owner] + nOldLeafs : 
-        owner + nOldLeafs - nNewLeafs;
+        owner + nOldLeafs + nNewLeafs;
         
-    newOwners[dataIndex] = newOwner;
+    nextOwners[newEntry] = newOwner;
 }
 
 bool MortonDacrtNodes::CreateLeafNodes() {
@@ -776,9 +766,6 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     thrust::transform(rayPartitions.begin() + leafNodes, rayPartitions.end(),
                       spherePartitions.begin() + leafNodes,
                       isLeaf.begin(), IsNodeLeaf());
-
-    isLeaf[0] = false; // LOL H4X0RS. Remove once I've tested that it works.
-    
     cout << "isLeaf:\n" << isLeaf << endl;    
 
     static thrust::device_vector<unsigned int> leafNodeIndices(nActiveNodes+1);
@@ -822,9 +809,9 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     unsigned int blocks = (nActiveSphereIndices / blocksize) + 1;
     PartitionLeafIndices<<<blocks, blocksize>>>
-        (RawPointer(sphereIndices) + leafSphereIndices, // starts at the first active index
-         RawPointer(sphereIndexPartition) + leafSphereIndices, // starts at the first active owner
-         RawPointer(spherePartitions) + leafNodes, // starts at the first active partition
+        (RawPointer(sphereIndices),
+         RawPointer(sphereIndexPartition),
+         RawPointer(spherePartitions) + leafNodes, // Starts at the first active partition
          RawPointer(isLeaf),
          RawPointer(leafSpheresStartIndex),
          RawPointer(leafNodeIndices),
@@ -833,10 +820,9 @@ bool MortonDacrtNodes::CreateLeafNodes() {
          nNewLeafIndices,
          leafNodes, // number of leafs prior to checking for new ones.
          nNewLeafs, // number of new leafs
-         RawPointer(nextSphereIndices) + leafNodes, // leaf data indices
-         RawPointer(nextSphereIndexPartition) + leafNodes, // leaf data owners
-         RawPointer(nextSphereIndices) + leafNodes + nNewLeafs, // next data indices
-         RawPointer(nextSphereIndexPartition) + leafNodes + nNewLeafs); // next data owners
+         // results
+         RawPointer(nextSphereIndices),
+         RawPointer(nextSphereIndexPartition));
     CHECK_FOR_CUDA_ERROR();
 
     // Copy new leaf geometry indices back into the old array to maintain a
@@ -859,10 +845,10 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     nextRayPartitions.resize(rayPartitions.size());
     nextSpherePartitions.resize(spherePartitions.size());
     
-    cudaFuncGetAttributes(&funcAttr, PartitionNewLeafNodes);
+    cudaFuncGetAttributes(&funcAttr, CreateNewLeafNodes);
     blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     blocks = (nActiveNodes / blocksize) + 1;
-    PartitionNewLeafNodes<<<blocks, blocksize>>>
+    CreateNewLeafNodes<<<blocks, blocksize>>>
         (RawPointer(rayPartitions) + leafNodes,
          RawPointer(spherePartitions) + leafNodes,
          RawPointer(isLeaf),
