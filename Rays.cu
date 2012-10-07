@@ -60,10 +60,11 @@ struct DeviceCreateRays {
         const float3 rayDir = d_cx * (((subX + 0.5f + dx) / d_sqrtSamples + x) / d_width - 0.5f) 
             + d_cy * (((subY + 0.5f + dy) / d_sqrtSamples + y) / d_height - 0.5f) + camDir;
         
+        
         const float3 rayOrigin = camOrigin + 130.0f * rayDir;
 
         return thrust::tuple<float4, float4>(make_float4(rayOrigin, index),
-                                             make_float4(rayDir, 0.0f));
+                                             make_float4(normalize(rayDir), 0.0f));
     }
 };
 
