@@ -58,6 +58,8 @@ public:
 
     inline thrust::device_vector<uint2>::iterator SpherePartitionsBegin() { return spherePartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator SpherePartitionsEnd() { return spherePartitions.end(); }
+
+    void FindIntersections(thrust::device_vector<unsigned int>& hitIDs);
     
     std::string ToString(const bool verbose = false) const;
 
