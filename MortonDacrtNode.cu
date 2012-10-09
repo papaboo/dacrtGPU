@@ -646,6 +646,10 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
 
 
 struct MortonIsNodeLeaf {
+    // TODO take morton codes into account. If rayPartition.x and
+    // rayPartition.y-1 points to the same morton code, then we can't possibly
+    // subdivide further.
+
     __host__ __device__
     bool operator()(const uint2 rayPartition, const uint2 spherePartition) const {
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
