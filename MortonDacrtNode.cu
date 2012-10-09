@@ -451,13 +451,13 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     static thrust::device_vector<MortonBound> bounds(6); bounds.resize(6);
     Kernels::ReduceMinMaxMortonByAxis(rayMortonCodes.begin(), rayMortonCodes.end(),
                                       bounds.begin(), bounds.end());
-    //std::cout << "Bounds:\n" << bounds << std::endl;
+    //cout << "Bounds:\n" << bounds << endl;
 
     // Find ray partition pivots
     rayPartitions.resize(6);
     FindInitialRayPartitions<<<1,32>>>(RawPointer(rayMortonCodes), rayMortonCodes.size(),
                                        RawPointer(rayPartitions));
-    //std::cout << "Initial ray partitions:\n" << rayPartitions << std::endl;
+    //cout << "Initial ray partitions:\n" << rayPartitions << endl;
 
     // Cull inactive partitions and bounds. (Ode to C++ auto or so I hear...)
     typedef thrust::zip_iterator<thrust::tuple<thrust::device_vector<uint2>::iterator, 
@@ -468,13 +468,13 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     PartitionBoundIterator partition_bound_end = thrust::remove_if(partition_bound_begin, partition_bound_begin+bounds.size(), InvalidAxis());
     bounds.resize(partition_bound_end - partition_bound_begin);
     rayPartitions.resize(bounds.size());
-    // std::cout << "Bounds:\n" << bounds << std::endl;
-    // std::cout << "rayPartitions:\n" << rayPartitions << std::endl;
+    // cout << "Bounds:\n" << bounds << endl;
+    // cout << "rayPartitions:\n" << rayPartitions << endl;
     
     HyperCubes hCubes(bounds.size());
     thrust::transform(bounds.begin(), bounds.end(), 
                       hCubes.Begin(), MortonBoundToHyperCube(rayMortonCoder));
-    std::cout << hCubes << std::endl;
+    // cout << hCubes << endl;
 
     InitSphereIndices(hCubes, spheres);
     // sphereIndices = new SphereContainer(hCubes, spheres, spherePartitionPivots);
@@ -497,9 +497,9 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         const size_t activeNodes = rayPartitions.size() - leafNodes;
         const size_t nextActiveNodes = activeNodes * 2;
         const size_t nextPartitionSize = leafNodes + nextActiveNodes;
-        cout << "nActiveNodes: " << activeNodes << endl;
-        cout << "nNextActiveNodes: " << nextActiveNodes << endl;
-        cout << "nNextPartitionSize: " << nextPartitionSize << endl;
+        //cout << "nActiveNodes: " << activeNodes << endl;
+        //cout << "nNextActiveNodes: " << nextActiveNodes << endl;
+        // cout << "nNextPartitionSize: " << nextPartitionSize << endl;
 
         nextRayPartitions.resize(nextPartitionSize);
         struct cudaFuncAttributes funcAttr;
@@ -629,19 +629,19 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         spherePartitions.swap(nextSpherePartitions);
         rayPartitions.swap(nextRayPartitions);
 
-        cout << "\n ** Before Leaf removal **\n" << ToString(true) << endl;
+        // cout << "\n ** Before Leaf removal **\n" << ToString(true) << endl;
 
         // *** Remove leafs ***
         CreateLeafNodes();        
 
-        cout << "\n ** After Leaf removal **\n" << ToString(true) << endl;
+        // cout << "\n ** After Leaf removal **\n" << ToString(true) << endl;
     }
     CHECK_FOR_CUDA_ERROR();
     
     // Compute bounds of geometry partitions and do coarse level ray elimination
     // before intersection.
 
-    cout << "\n *** GORELESS VICTORY ***\n" << endl;
+    // cout << "\n *** GORELESS VICTORY ***\n" << endl;
 }
 
 
@@ -651,8 +651,8 @@ struct MortonIsNodeLeaf {
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
         const float sphereCount = (float)(spherePartition.y - spherePartition.x);
         
-        return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
-        //return rayCount * sphereCount <= 6.0f * (rayCount + sphereCount);
+        //return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
+        return rayCount * sphereCount <= 11.0f * (rayCount + sphereCount);
     }
 };
 
@@ -944,7 +944,18 @@ void MortonDacrtNodes::FindIntersections(thrust::device_vector<unsigned int>& hi
     // queues on high end cards.
     static thrust::device_vector<unsigned int> owners(nActiveRays);
     owners.resize(nActiveRays);
-    DacrtNodes::CalcOwners(RayPartitionsBegin(), RayPartitionsEnd(), owners);
+    
+    // Use segmented scan instead
+    thrust::host_vector<uint2> hPartitions = rayPartitions;
+    thrust::host_vector<unsigned int> hOwners(nActiveRays);
+
+    for (unsigned int p = 0; p < hPartitions.size(); ++p) {
+        uint2 partition = hPartitions[p];
+        for (unsigned int i = partition.x; i < partition.y; ++i)
+            hOwners[i] = p;
+    }
+
+    owners = hOwners;
 
     // Perform exhaustive intersection.
     struct cudaFuncAttributes funcAttr;
@@ -1031,14 +1042,14 @@ std::string MortonDacrtNodes::PrintNode(const unsigned int i, const bool verbose
     out << i << ": [rays: [" << rayPartition.x << " -> " << rayPartition.y << 
         "], spheres: [" << spherePartition.x << " -> " << spherePartition.y << "]]";
     if (verbose) {
-        out << "\n  Rays: [";
-        for (int r = rayPartition.x; r < rayPartition.y; ++r) {
-            out << rays->GetLeafRay(r).id;
-            if (r < rayPartition.y-1) 
-                out << ", ";
-            else 
-                out << "]";
-        }
+        // out << "\n  Rays: [";
+        // for (int r = rayPartition.x; r < rayPartition.y; ++r) {
+        //     out << rays->GetLeafRay(r).id;
+        //     if (r < rayPartition.y-1) 
+        //         out << ", ";
+        //     else 
+        //         out << "]";
+        // }
 
         out << "\n  Spheres: [";
         for (int s = spherePartition.x; s < spherePartition.y; ++s) {

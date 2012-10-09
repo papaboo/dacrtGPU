@@ -12,9 +12,10 @@
 
 #include <DacrtNode.h>
 #include <Fragment.h>
-#include <RayContainer.h>
+#include <Kernels/ReduceMinMaxMortonCode.h>
 #include <MortonDacrtNode.h>
 #include <Meta/CUDA.h>
+#include <RayContainer.h>
 #include <Shading.h>
 #include <SphereContainer.h>
 #include <SphereGeometry.h>
@@ -32,10 +33,10 @@ using std::cout;
 using std::endl;
 
 //const int WIDTH = 8, HEIGHT = 8;
-const int WIDTH = 16, HEIGHT = 16;
+//const int WIDTH = 16, HEIGHT = 16;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-//const int WIDTH = 128, HEIGHT = 128;
+const int WIDTH = 128, HEIGHT = 128;
 //const int WIDTH = 256, HEIGHT = 256;
 int sqrtSamples;
 int samples;
@@ -44,8 +45,22 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
     MortonDacrtNodes mNodes = MortonDacrtNodes(1);
-    mNodes.Create(rays, spheres);
-    
+    while (rays.InnerSize() > 0) {
+        
+        cout << "Rays this pass: " << rays.InnerSize() << endl;
+
+        mNodes.Create(rays, spheres);
+
+        static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
+        mNodes.FindIntersections(hitIDs);
+
+        Shading::Normals(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
+                         spheres, rayFrags);
+
+        rays.RemoveTerminated(hitIDs);
+    }
+
+    /*    
     DacrtNodes nodes = DacrtNodes(1);
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
@@ -64,6 +79,7 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
 
         ++bounce;
     }
+    */
 }
 
 __constant__ int d_samples;
@@ -117,7 +133,7 @@ int main(int argc, char *argv[]){
     Fragments frags(WIDTH * HEIGHT * samples);
     thrust::device_vector<float4> colors(WIDTH * HEIGHT);
 
-    SpheresGeometry geom = SpheresGeometry::CornellBox(10);
+    SpheresGeometry geom = SpheresGeometry::CornellBox(25); // 25
     // cout << geom << endl;
 
     for (int i = 0; i < iterations; ++i) {
