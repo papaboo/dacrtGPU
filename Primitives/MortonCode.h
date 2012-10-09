@@ -81,6 +81,10 @@ struct MortonBound {
     __host__ __device__    
     inline static MortonBound LowestCommonBound(const MortonCode min, const MortonCode max) {
         unsigned int diff = min.code ^ max.code;
+        
+        // If both bounds are the same, then return a bound around min and max
+        if (diff == 0) return MortonBound::Create(min);
+
         diff = ReverseBits(diff);
 
         int n = FirstBitSet(diff) - 1;
