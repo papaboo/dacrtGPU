@@ -903,6 +903,31 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     return true;
 }
 
+__global__
+void CreateOwnersMap(const uint2* const partitionings,
+                     const unsigned int* const owners,
+                     unsigned int* ownersMap,
+                     const unsigned int nPartitionings) {
+
+    unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nPartitionings) return;
+    
+    const unsigned int partitionBegin = partitionings[id].x;
+    const unsigned int mapEntry = owners[partitionBegin];
+    ownersMap[mapEntry] = id;
+}
+
+__global__
+void RemapOwners(const unsigned int* const ownersMap,
+                 unsigned int* owners,
+                 const unsigned int nOwners) {
+    
+    unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nOwners) return;
+
+    const unsigned int oldOwner = owners[id];
+    owners[id] = ownersMap[oldOwner];
+}
 
 __global__
 void ExhaustiveIntersection(const float4* const rayOrigins, 
@@ -944,28 +969,30 @@ void MortonDacrtNodes::FindIntersections(thrust::device_vector<unsigned int>& hi
     const unsigned int nActiveRays = rays->LeafRays();
     hitIDs.resize(nActiveRays);
     
-    // Compute which nodes each ray belongs to. This should be done using work
-    // queues on high end cards.
-    static thrust::device_vector<unsigned int> owners(nActiveRays);
+    // Compute which nodes each ray belongs to. This should probably be done
+    // using work queues on high end cards.
+    thrust::device_vector<unsigned int> owners(nActiveRays);
     owners.resize(nActiveRays);
+    DacrtNodes::CalcOwners(rayPartitions.begin(), rayPartitions.end(), owners);
+    // Calc owners assumes that partitions are sorted in increasing order, but
+    // any node at any given time can be marked as a leaf node, so we need to
+    // correct this.
+    thrust::device_vector<unsigned int> ownersMap(rayPartitions.size());
+    unsigned int blocksize = 256;
+    unsigned int blocks = (rayPartitions.size() / blocksize) + 1;
+    CreateOwnersMap<<<blocks, blocksize>>>(RawPointer(rayPartitions), RawPointer(owners),
+                                           RawPointer(ownersMap), rayPartitions.size());
     
-    // Use segmented scan instead
-    thrust::host_vector<uint2> hPartitions = rayPartitions;
-    thrust::host_vector<unsigned int> hOwners(nActiveRays);
-
-    for (unsigned int p = 0; p < hPartitions.size(); ++p) {
-        uint2 partition = hPartitions[p];
-        for (unsigned int i = partition.x; i < partition.y; ++i)
-            hOwners[i] = p;
-    }
-
-    owners = hOwners;
-
+    blocksize = 256;
+    blocks = (nActiveRays / blocksize) + 1;
+    RemapOwners<<<blocks, blocksize>>>(RawPointer(ownersMap), RawPointer(owners),
+                                       nActiveRays);
+    
     // Perform exhaustive intersection.
     struct cudaFuncAttributes funcAttr;
     cudaFuncGetAttributes(&funcAttr, ExhaustiveIntersection);
-    unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
-    unsigned int blocks = (nActiveRays / blocksize) + 1;
+    blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    blocks = (nActiveRays / blocksize) + 1;
     ExhaustiveIntersection<<<blocks, blocksize>>>
         (RawPointer(Rays::GetOrigins(rays->BeginLeafRays())),
          RawPointer(Rays::GetDirections(rays->BeginLeafRays())),
