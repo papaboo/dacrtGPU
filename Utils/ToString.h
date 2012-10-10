@@ -64,13 +64,17 @@ inline std::ostream& operator<<(std::ostream& s, const thrust::device_vector<T>&
 template <class T>
 inline std::string Bitmap(T n){
     std::ostringstream out;
+
+    // Convert bitmap to 64 bit representation that can be &'ed
+    long long bitmap = *(long long*) &n;
+
     out << "[";
-    int firstIndex = sizeof(T) * 8-1;
+    int firstIndex = sizeof(T) * 8-1; // First index is determined by the size of the input.
     for (int i = firstIndex; i >= 0 ; --i){
         if ((i % 4) == 3 && i != firstIndex) 
             out << " ";
 
-        if (n & (T)1<<i)
+        if (bitmap & (long long)1<<i)
             out << 1;
         else
             out << "-";
