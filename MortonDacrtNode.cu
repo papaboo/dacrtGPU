@@ -57,10 +57,15 @@ struct RayMortonCoder {
         : bound(bound), boundInvSize(bound.InvertedSize()) {}
 
     __host__ __device__
-    inline MortonCode operator()(const thrust::tuple<float4, float4> ray) {
+    inline MortonCode operator()(const thrust::tuple<float4, float4> ray) const {
 
         float3 origin = make_float3(thrust::get<0>(ray));
         const float3 direction = make_float3(thrust::get<1>(ray));
+        return (*this)(origin, direction);
+    }
+    
+    __host__ __device__
+    inline MortonCode operator()(float3 origin, const float3 direction) const {
         
         float tHit;
         if (!bound.ClosestIntersection(origin, direction, tHit)) 
@@ -89,11 +94,11 @@ struct RayMortonCoder {
         return mortonCode;
     }
     
-    __host__ __device__ inline unsigned int CreateXIndex(const float x) { return (x - bound.min.x) * boundInvSize.x * 63.999f; }
-    __host__ __device__ inline unsigned int CreateYIndex(const float y) { return (y - bound.min.y) * boundInvSize.y * 31.999f; }
-    __host__ __device__ inline unsigned int CreateZIndex(const float z) { return (z - bound.min.z) * boundInvSize.z * 63.999f; }
-    __host__ __device__ inline unsigned int CreateUIndex(const float u) { return (u + 1.0f) * 31.999f; }
-    __host__ __device__ inline unsigned int CreateVIndex(const float v) { return (v + 1.0f) * 31.999f; }
+    __host__ __device__ inline unsigned int CreateXIndex(const float x) const { return (x - bound.min.x) * boundInvSize.x * 63.999f; }
+    __host__ __device__ inline unsigned int CreateYIndex(const float y) const { return (y - bound.min.y) * boundInvSize.y * 31.999f; }
+    __host__ __device__ inline unsigned int CreateZIndex(const float z) const { return (z - bound.min.z) * boundInvSize.z * 63.999f; }
+    __host__ __device__ inline unsigned int CreateUIndex(const float u) const { return (u + 1.0f) * 31.999f; }
+    __host__ __device__ inline unsigned int CreateVIndex(const float v) const { return (v + 1.0f) * 31.999f; }
     
     __host__ __device__ inline float XMin(const unsigned int xIndex) const { return (float)xIndex / (63.999f * boundInvSize.x) + bound.min.x; }
     __host__ __device__ inline float XMax(const unsigned int xIndex) const { return XMin(xIndex+1.0f); }
@@ -491,7 +496,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     int counter = 0;
     while (spherePartitions.size() - leafNodes > 0) {
         ++counter;
-        cout << "\n *** ROUND " << counter << " - FIGHT ***\n" << endl;
+        cout << "*** ROUND " << counter << " - FIGHT ***\n" << endl;
 
         // Create new ray partitions through binary search
         const size_t activeNodes = rayPartitions.size() - leafNodes;
@@ -539,7 +544,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         cudaFuncGetAttributes(&funcAttr, SpherePartitioningByConesKernel);
         blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
         blocks = (nActiveSpheres / blocksize) + 1;
-        // TODO don't offset sphereIndices and other arrays? And fix the error
         SpherePartitioningByConesKernel<<<blocks, blocksize>>>
             (RawPointer(sphereIndices),
              RawPointer(sphereIndexPartition),
@@ -632,8 +636,8 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         // cout << "\n ** Before Leaf removal **\n" << ToString(true) << endl;
 
         // *** Remove leafs ***
-        CreateLeafNodes();        
-
+        CreateLeafNodes(rayMortonCodes);
+        
         // cout << "\n ** After Leaf removal **\n" << ToString(true) << endl;
     }
     CHECK_FOR_CUDA_ERROR();
@@ -641,22 +645,27 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     // Compute bounds of geometry partitions and do coarse level ray elimination
     // before intersection.
 
-    // cout << "\n *** GORELESS VICTORY ***\n" << endl;
+    cout << "\n *** GORELESS VICTORY ***\n" << endl;
 }
 
 
 struct MortonIsNodeLeaf {
-    // TODO take morton codes into account. If rayPartition.x and
-    // rayPartition.y-1 points to the same morton code, then we can't possibly
-    // subdivide further.
+    unsigned int* mortonCodes;
 
-    __host__ __device__
+    MortonIsNodeLeaf(thrust::device_vector<unsigned int>& mCodes) 
+        : mortonCodes(RawPointer(mCodes)) {}
+
+    __device__
     bool operator()(const uint2 rayPartition, const uint2 spherePartition) const {
+        const MortonCode cMin = mortonCodes[rayPartition.x];
+        const MortonCode cMax = mortonCodes[rayPartition.y-1];
+        const bool lowestBound = cMin == cMax;
+        
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
         const float sphereCount = (float)(spherePartition.y - spherePartition.x);
-        
-        //return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
-        return rayCount * sphereCount <= 11.0f * (rayCount + sphereCount);
+        const bool fewOfAPrimitive = rayCount * sphereCount <= 11.0f * (rayCount + sphereCount);
+
+        return lowestBound || fewOfAPrimitive;
     }
 };
 
@@ -764,12 +773,12 @@ void PartitionLeafIndices(const unsigned int* const indices,
     nextOwners[newEntry] = newOwner;
 }
 
-bool MortonDacrtNodes::CreateLeafNodes() {
+bool MortonDacrtNodes::CreateLeafNodes(thrust::device_vector<unsigned int>& mortonCodes) {
     
     const size_t nActiveNodes = spherePartitions.size() - leafNodes;
     const size_t nActiveSphereIndices = sphereIndices.size() - leafSphereIndices;
     
-    cout << "\n --- Create leaf nodes from " << nActiveNodes << " active nodes and " << nActiveSphereIndices << " active sphere indices. ---\n" << endl;
+    cout << " --- Create leaf nodes from " << nActiveNodes << " active nodes and " << nActiveSphereIndices << " active sphere indices. ---\n" << endl;
 
     // Locate leaf partitions
     static thrust::device_vector<bool> isLeaf(nActiveNodes);
@@ -779,7 +788,7 @@ bool MortonDacrtNodes::CreateLeafNodes() {
     // stored in an index and it's neighbour.
     thrust::transform(rayPartitions.begin() + leafNodes, rayPartitions.end(),
                       spherePartitions.begin() + leafNodes,
-                      isLeaf.begin(), MortonIsNodeLeaf());
+                      isLeaf.begin(), MortonIsNodeLeaf(mortonCodes));
     // cout << "isLeaf:\n" << isLeaf << endl;    
 
     static thrust::device_vector<unsigned int> leafNodeIndices(nActiveNodes+1);
@@ -1073,6 +1082,15 @@ std::string MortonDacrtNodes::PrintNode(const unsigned int i, const bool verbose
     out << i << ": [rays: [" << rayPartition.x << " -> " << rayPartition.y << 
         "], spheres: [" << spherePartition.x << " -> " << spherePartition.y << "]]";
     if (verbose) {
+        Ray rMin = rays->GetLeafRay(rayPartition.x);
+        Ray rMax = rays->GetLeafRay(rayPartition.y-1);
+        
+        RayMortonCoder rayMortonCoder(spheresGeom->GetBounds());
+        MortonCode cMin = rayMortonCoder(rMin.origin, rMin.direction);
+        MortonCode cMax = rayMortonCoder(rMin.origin, rMin.direction);
+        out << "\n  Rays: [min: " << cMin << "\n         max: " << cMax << "]";
+        out << "\n  Ray bound: " << MortonBound::LowestCommonBound(cMin, cMax);
+        
         // out << "\n  Rays: [";
         // for (int r = rayPartition.x; r < rayPartition.y; ++r) {
         //     out << rays->GetLeafRay(r).id;
