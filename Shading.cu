@@ -9,8 +9,10 @@
 #include <Shading.h>
 
 #include <Fragment.h>
+#include <Meta/CUDA.h>
 #include <Primitives/Sphere.h>
 #include <SphereGeometry.h>
+#include <Utils/Random.h>
 
 #include <thrust/transform.h>
 
@@ -82,129 +84,121 @@ void Shading::Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd,
 }    
 
 
+ // TODO Place all material parameters in a struct and create access methods for
+ // it, so I don't have to extend the shade kernels each time I add a new
+ // parameter.
+__global__
+void PathTraceKernel(float4* rayOrigins,
+                     float4* rayDirections,
+                     unsigned int* hitIDs, // Contains information about the new rays after 
+                     const Sphere* const spheres,
+                     const unsigned int* const matIDs,
+                     const float4* const emission_reflections,
+                     const float4* const color_refractions,
+                     float4* emission_bounces, // result
+                     float4* fs, // result
+                     const unsigned int nRays, 
+                     const unsigned int seed) {
 
-struct ShadeKernel {
-    Sphere* spheres;
-    unsigned int* matIDs;
+    const unsigned int rayID = threadIdx.x + blockDim.x * blockIdx.x;
+    if (rayID >= nRays) return;
     
-    float4 *emission_reflections, *color_refractions;
+    const unsigned int hitID = hitIDs[rayID];
     
-    float4 *emission_bounces, *fs;
-    float* random;
+    const float4 originId = rayOrigins[rayID];
+    const float3 rayOrigin = make_float3(originId);
+    const unsigned int fragID = originId.w;
 
-    ShadeKernel(SpheresGeometry& sg,
-          Fragments& frags)
-        : spheres(thrust::raw_pointer_cast(sg.spheres.data())),
-          matIDs(thrust::raw_pointer_cast(sg.materialIDs.data())),
-          color_refractions(thrust::raw_pointer_cast(sg.materials.color_refraction.data())),
-          emission_reflections(thrust::raw_pointer_cast(sg.materials.emission_reflection.data())),
-          emission_bounces(thrust::raw_pointer_cast(frags.emissionDepth.data())),
-          fs(thrust::raw_pointer_cast(frags.f.data())) {
-        thrust::host_vector<float> host_random(sg.spheres.size());
-        thrust::generate(host_random.begin(), host_random.end(), Rand01);
-        thrust::device_vector<float> gpu_random = host_random;
-        random = thrust::raw_pointer_cast(gpu_random.data());
+    const float4 emission_bounce = emission_bounces[fragID];
+
+    const float3 oldF = make_float3(fs[fragID]);
+    if (hitID == SpheresGeometry::MISSED) {
+        const float3 backgroundColor = make_float3(0.8f, 0.8f, 0.8f);
+        const float3 color = oldF * backgroundColor;
+        emission_bounces[fragID] = make_float4(color, emission_bounce.w);
+        hitIDs[rayID] = 0; // Make a note that this ray should be terminated.
+        return;
     }
     
-    __host__ __device__
-    thrust::tuple<unsigned int, thrust::tuple<float4, float4> > operator()(const thrust::tuple<unsigned int, thrust::tuple<float4, float4>, float2> hitID_Ray_rand) const {
-        const unsigned int hitID = thrust::get<0>(hitID_Ray_rand);
-        const float4 originId = thrust::get<0>(thrust::get<1>(hitID_Ray_rand));
-        const float3 origin = make_float3(originId);
-        const unsigned int id = originId.w;
-
-        const float4 emission_bounce = emission_bounces[id];
-
-        const float3 oldF = make_float3(fs[id]);
-        if (hitID == SpheresGeometry::MISSED) {
-            const float3 backgroundColor = make_float3(0.8f, 0.8f, 0.8f);
-            const float3 color = oldF * backgroundColor;
-            emission_bounces[id] = make_float4(color, emission_bounce.w);
-            return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >
-                (0, thrust::get<1>(hitID_Ray_rand));
-        }
+    const unsigned int matID = matIDs[hitID];
+    const float4 emission_reflection = emission_reflections[matID];
         
-        const unsigned int matID = matIDs[hitID];
-        const float4 emission_reflection = emission_reflections[matID];
-        // If bounces above max bounce then terminate. (If that is all we should
-        // do it can be done in a seperate kernel)
-        if (emission_bounce.w >= 5) {
-            emission_bounces[id] = emission_bounce + make_float4(oldF * make_float3(emission_reflection), 0);
-            return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >
-                (0, thrust::get<1>(hitID_Ray_rand));
-        }
-        
-        const Sphere sphere = spheres[hitID];
-
-        const float4 dir_t = thrust::get<1>(thrust::get<1>(hitID_Ray_rand));
-        float3 dir = make_float3(dir_t);
-        const float t = dir_t.w;
-        
-        const float3 hitPos = origin + t * dir; // we could store hitPos in the rays origin, since we should already know it from the intersection test.
-        float3 norm = normalize(hitPos - sphere.center);
-        const bool into = dot(norm, dir) > 0.0f;
-        norm = into ? norm * -1.0f : norm;
-        
-        float2 rand = thrust::get<2>(hitID_Ray_rand); // first rand determines  ray type, second ray bounce dir
-        float colorContribution = 0.0f;;
-        const float refraction = color_refractions[matID].w;
-        if (rand.x < emission_reflection.w) {
-            // ray is reflected
-            dir = dir - norm * 2 * dot(norm, dir);
-        } else if (rand.x < (emission_reflection.w + refraction)) {
-            // ray is refracted
-            float nc = 1.0f, nt = 1.5f;
-            float nnt = into ? nc / nt : nt / nc;
-            float ddn = dot(dir, norm);
-            float cos2t = 1.0f - nnt * nnt * (1.0f - ddn * ddn);
-            if (cos2t < 0.0f) {
-                // Total internal reflections
-                dir = dir - norm * 2 * dot(norm, dir);
-            } else {
-                float3 tDir = normalize(dir * nnt - norm * (ddn * nnt + sqrt(cos2t)));
-                float a = nt-nc, b = nt+nc, R0 = a*a/(b*b), c = 1.0f-(into ? -ddn : dot(tDir, into? norm :-norm));
-                float Re = R0+(1-R0)*c*c*c*c*c; // float Tr = 1.0f-Re;
-                float P = 0.25f + 0.5f * Re; 
-                // float RP = Re / P, TP = Tr / (1.0f-P);
-                if (rand.y < P) // reflection
-                    dir = dir - norm * 2 * dot(norm, dir);
-                else 
-                    dir = tDir;
-            }
-        }else {
-            // ray is diffuse
-            colorContribution = 1.0f;
-
-            // Mod rand.x to 0.0 - 1.0f value
-            const float randMod = emission_reflection.w + refraction;
-            rand.x = (rand.x - randMod) / (1.0f - randMod);
-            
-            const float r1 = 2 * PI * rand.y;
-            const float r2 = rand.x; // need anothor rand value, mod rand.x with reflection and refraction values?
-            const float r2s = sqrtf(r2);
-            // Tangent space ?
-            const float3 w = norm;
-            const float3 u = normalize(fabsf(w.x) > 0.1f ? 
-                                       make_float3(0,1,0) : 
-                                       cross(make_float3(1,0,0), w));
-            const float3 v = cross(w, u);
-            dir = normalize(u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrtf(1-r2));
-        }
-
-        const float4 color_refraction = color_refractions[matID];
-        emission_bounces[id] = emission_bounce + make_float4(colorContribution * oldF * make_float3(emission_reflection), 1.0f);
-        fs[id] = make_float4(oldF * make_float3(color_refraction), 0.0f);
-        thrust::tuple<float4, float4> newRay(make_float4(hitPos + norm * 0.02f, id), 
-                                             make_float4(dir, 0.0f));
-        
-        return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >(1, newRay);
+    if (emission_bounce.w >= 5) {
+        emission_bounces[fragID] = emission_bounce + make_float4(oldF * make_float3(emission_reflection), 0);
+        hitIDs[rayID] = 0; // Make a note that this ray should be terminated.
+        return;
     }
-};
 
-inline float2 RandomFloat2() {
-    float x = (float)rand() / (float)RAND_MAX;
-    float y = (float)rand() / (float)RAND_MAX;
-    return make_float2(x, y);
+    const float4 dir_t = rayDirections[rayID];
+    float3 dir = make_float3(dir_t);
+    const float t = dir_t.w;
+
+    const Sphere sphere = spheres[hitID];
+
+    const float3 hitPos = t * dir + rayOrigin; // we could store hitPos in the rays origin, since we should already know it from the intersection test.
+    float3 norm = normalize(hitPos - sphere.center);
+    const bool into = dot(norm, dir) > 0.0f;
+    norm = into ? norm * -1.0f : norm;
+    
+    Random rand = Random::Create1D(seed);
+    
+    float colorContribution = 0.0f;
+
+    // TODO add reflection and refraction
+    if (rand.NextFloat01() < emission_reflection.w) {
+        // ray is reflected
+        dir = dir - norm * 2 * dot(norm, dir);
+    } else if (rand.NextFloat01() < color_refractions[matID].w){
+        float3 reflect = dir - norm * 2.0f * dot(norm, dir);
+        
+        // Pure magic 'borrowed' from smallpt
+        float nc = 1.0f, nt = 1.5f;
+        float nnt = into ? nc/nt : nt/nc;
+        float ddn = dot(dir, norm);
+        float cos2t = 1.0f - nnt * nnt * (1.0f - ddn * ddn);
+        
+        if (cos2t < 0.0f) {
+            dir = reflect;
+        } else {
+            float3 tDir = normalize(dir * nnt - norm * (ddn*nnt+sqrt(cos2t)));
+            float a=nt-nc, b=nt+nc, R0=a*a/(b*b), c = 1-(into?-ddn : dot(tDir, norm)); // TODO This norm is actually flipped. Does it matter?
+            float Re=R0+(1-R0)*c*c*c*c*c;
+            float P = 0.25f + 0.5f * Re; 
+            // float Tr = 1.0f - Re;
+            // float RP = Re / P, TP = Tr / (1.0f-P);
+            if (rand.NextFloat01() < P) // reflection
+                dir = reflect;
+            else 
+                dir = tDir;
+        }
+    } else {
+    
+        // ray is diffuse
+        colorContribution = 1.0f;
+        
+        const float r1 = 2 * PI * rand.NextFloat01();
+        const float r2 = rand.NextFloat01();
+        const float r2s = sqrtf(r2);
+        // Tangent space ?
+        const float3 w = norm;
+        const float3 u = normalize(fabsf(w.x) > 0.1f ? 
+                               make_float3(0,1,0) : 
+                                   cross(make_float3(1,0,0), w));
+        const float3 v = cross(w, u);
+        dir = normalize(u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrtf(1.0f-r2));
+    }
+
+    const float4 color_refraction = color_refractions[matID];
+    emission_bounces[fragID] = emission_bounce + make_float4(colorContribution * oldF * make_float3(emission_reflection), 1.0f);
+    fs[fragID] = make_float4(oldF * make_float3(color_refraction), 0.0f);
+        
+    rayOrigins[rayID] = make_float4(hitPos + norm * 0.02f, fragID);
+    rayDirections[rayID] = make_float4(dir, 0.0f);
+    
+    hitIDs[rayID] = 1; // Note that this ray should not be terminated. TODO
+                       // Perhaps I should just use sphere missed to denote done
+                       // rays and anything else to denote not done rays. Then I
+                       // would save a couple of writes.
 }
 
 void Shading::Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
@@ -212,21 +206,23 @@ void Shading::Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd,
                     SpheresGeometry& spheres,
                     Fragments& frags) {
 
-    size_t rayCount = raysEnd - raysBegin;
+    size_t nRays = raysEnd - raysBegin;
 
-    // Generate random numbers
-    static thrust::host_vector<float2> host_random(rayCount);
-    static thrust::device_vector<float2> random(rayCount);
-    host_random.resize(rayCount);
-    thrust::generate(host_random.begin(), host_random.end(), RandomFloat2);
-    random = host_random;
-    
-    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator, Float2Iterator> > hitRayBegin =
-        thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin, random.begin()));
-
-    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > hitRayRes =
-        thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin));
-
-    thrust::transform(hitRayBegin, hitRayBegin + rayCount,
-                      hitRayRes, ShadeKernel(spheres, frags));
+    struct cudaFuncAttributes funcAttr;
+    cudaFuncGetAttributes(&funcAttr, PathTraceKernel);
+    unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    unsigned int blocks = (nRays / blocksize) + 1;
+    PathTraceKernel<<<blocks, blocksize>>>
+        (RawPointer(Rays::GetOrigins(raysBegin)),
+         RawPointer(Rays::GetDirections(raysBegin)),
+         RawPointer(hitIDs), // Contains information about the new rays after 
+         RawPointer(spheres.spheres),
+         RawPointer(spheres.materialIDs),
+         RawPointer(spheres.materials.emission_reflection),
+         RawPointer(spheres.materials.color_refraction),
+         RawPointer(frags.emissionDepth), // result
+         RawPointer(frags.f), // result
+         nRays,
+         rand());
+    CHECK_FOR_CUDA_ERROR();
 }
