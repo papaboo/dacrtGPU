@@ -104,7 +104,7 @@ struct MortonBound {
      */
     __host__ __device__
     inline bool Splitable() const {
-        return min.code == max.code;
+        return min.code != max.code;
     }
 
     /**
