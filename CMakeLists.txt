@@ -7,7 +7,8 @@ IF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
   ADD_DEFINITIONS(-m32 -Wall -Wextra -Wno-unused-parameter)
   SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -m32")
   SET(CUDA_64_BIT_DEVICE_CODE OFF)
-  ADD_DEFINITIONS(-DTHRUST_DEBUG=1)
+  #  ADD_DEFINITIONS(-DTHRUST_DEBUG=1)
+  ADD_DEFINITIONS(-o2)
 ENDIF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
 
 INCLUDE_DIRECTORIES(.)
@@ -60,31 +61,44 @@ TARGET_LINK_LIBRARIES(${PROJ_NAME}
   ${CUDA_LIBRARIES} #cuda rt
 )
 
+SET(COMPILE_TESTS TRUE)
+IF(${COMPILE_TESTS})
+  #segmented reduce test
+  CUDA_ADD_EXECUTABLE(TestSegReduce
+    Tests/thrust_reduce_by_key.cu
+  )
+  TARGET_LINK_LIBRARIES(TestSegReduce
+    ${CUDA_LIBRARIES} #cuda rt
+  )
+  
+  #segmented reduce test
+  CUDA_ADD_EXECUTABLE(TestPlayground
+    Tests/reduce_by_key_playground.cu
+  )
+  TARGET_LINK_LIBRARIES(TestPlayground
+    ${CUDA_LIBRARIES} #cuda rt
+  )
+  
+  
+  # WorkQueueTest
+  CUDA_ADD_EXECUTABLE(TestWorkQueue
+    Meta/CUDA.h
+    Meta/CUDA.cu
+    Tests/WorkQueueCalcsOwners.cu
+  )
 
-#segmented reduce test
-CUDA_ADD_EXECUTABLE(TestSegReduce
-  Tests/thrust_reduce_by_key.cu
-)
-TARGET_LINK_LIBRARIES(TestSegReduce
-  ${CUDA_LIBRARIES} #cuda rt
-)
-
-#segmented reduce test
-CUDA_ADD_EXECUTABLE(TestPlayground
-  Tests/reduce_by_key_playground.cu
-)
-TARGET_LINK_LIBRARIES(TestPlayground
-  ${CUDA_LIBRARIES} #cuda rt
-)
-
-
-# WorkQueueTest
-CUDA_ADD_EXECUTABLE(TestWorkQueue
-  Meta/CUDA.h
-  Meta/CUDA.cu
-  Tests/WorkQueueCalcsOwners.cu
-)
-
-TARGET_LINK_LIBRARIES(TestWorkQueue
-  ${CUDA_LIBRARIES} #cuda rt
-)
+  TARGET_LINK_LIBRARIES(TestWorkQueue
+    ${CUDA_LIBRARIES} #cuda rt
+  )
+  
+  # WorkQueueTest
+  CUDA_ADD_EXECUTABLE(TestGPURandomNumbers
+    Meta/CUDA.h
+    Meta/CUDA.cu
+    Tests/GPURandomNumbers.cu
+  )
+  
+  TARGET_LINK_LIBRARIES(TestGPURandomNumbers
+    ${CUDA_LIBRARIES} #cuda rt
+  )
+ENDIF(${COMPILE_TESTS})
