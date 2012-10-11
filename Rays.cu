@@ -68,7 +68,6 @@ Rays::Rays(const int width, const int height, const int sqrtSamples) {
     cudaFuncGetAttributes(&funcAttr, CreateRaysKernel);
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     unsigned int blocks = (size / blocksize) + 1;
-    std::cout << "CreateRaysKernel<<<" << blocks << ", " << blocksize << ">>>" << std::endl;
     CreateRaysKernel<<<blocks, blocksize>>>(width, height, sqrtSamples, cx, cy, rand(),
                                             RawPointer(origins), RawPointer(axisUVs));
     CHECK_FOR_CUDA_ERROR();
