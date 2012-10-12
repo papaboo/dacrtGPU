@@ -41,13 +41,6 @@ MortonDacrtNodes::MortonDacrtNodes(const size_t capacity)
       nextSphereIndices(capacity), nextSphereIndexPartition(capacity),
       leafSphereIndices(0) {}
 
-// TODO Apply the reduced upper bounds to the next levels partition bounds, to
-// avoid to many false positives (in case of cone intersection, this will
-// reduce the area between the hypercube and the cone, where false positives
-// occur)
-/// This can be done by storing all 6 reduced bounds in constant memory,
-/// MortonBound[6], and then performing min and max.
-
 struct RayMortonCoder {
     
     // TODO Copy these fields to CUDA as constants (After I'm done doing host testing)
@@ -223,12 +216,15 @@ void FindNewRayPartitions(const uint2* const rayPartitions,
     nextRayPartitions[id*2+1] = make_uint2(pivot.x, partition.y);
 }
 
+__constant__ MortonBound d_initialBounds[6];
+
 struct CreateBoundsFromPartitions {
     unsigned int* rayMortonCodes;
 
     CreateBoundsFromPartitions(thrust::device_vector<unsigned int>& codes)
         : rayMortonCodes(RawPointer(codes)) {}
-    
+
+    /*
     __host__ __device__
     MortonBound operator()(const uint2 rayPartition) const {
         const MortonCode min = rayMortonCodes[rayPartition.x];
@@ -236,6 +232,21 @@ struct CreateBoundsFromPartitions {
         
         return MortonBound::LowestCommonBound(min, max);
     }
+    */
+
+    __host__ __device__
+    MortonBound operator()(const uint2 rayPartition) const {
+        const MortonCode min = rayMortonCodes[rayPartition.x];
+        const MortonCode max = rayMortonCodes[rayPartition.y-1];
+        MortonBound partitionBound = MortonBound::LowestCommonBound(min, max);
+
+        const SignedAxis axis = min.GetAxis();
+        MortonBound upper = d_initialBounds[axis];
+
+        return MortonBound::Create(Utils::Morton::MaxBy4(partitionBound.min, upper.min),
+                                   Utils::Morton::MinBy4(partitionBound.max, upper.max));
+    }
+
 };
 
 struct CreateHyperCubesFromBounds {
@@ -452,7 +463,11 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     static thrust::device_vector<MortonBound> bounds(6); bounds.resize(6);
     Kernels::ReduceMinMaxMortonByAxis(rayMortonCodes.begin(), rayMortonCodes.end(),
                                       bounds.begin(), bounds.end());
-    //cout << "Bounds:\n" << bounds << endl;
+    // cout << "Bounds:\n" << bounds << endl;
+
+    // Copy initial bounds to the GPU's constant memory.
+    cudaMemcpyToSymbol(d_initialBounds, RawPointer(bounds), sizeof(MortonBound) * 6, 0, cudaMemcpyDeviceToDevice);
+    CHECK_FOR_CUDA_ERROR();
 
     // Find ray partition pivots
     rayPartitions.resize(6);
@@ -659,7 +674,7 @@ struct MortonIsNodeLeaf {
         
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
         const float sphereCount = (float)(spherePartition.y - spherePartition.x);
-        const bool fewOfAPrimitive = rayCount * sphereCount <= 11.0f * (rayCount + sphereCount);
+        const bool fewOfAPrimitive = rayCount * sphereCount <= 32.0f * (rayCount + sphereCount);
 
         return lowestBound || fewOfAPrimitive;
     }
