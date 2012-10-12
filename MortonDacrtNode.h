@@ -72,7 +72,7 @@ private:
      *
      * Returns true if any new done nodes are created.
      */
-    bool CreateLeafNodes();
+    bool CreateLeafNodes(thrust::device_vector<unsigned int>& mortonCodes);
     
     /**
      * Initializes sphereIndices and spherePartitions.
