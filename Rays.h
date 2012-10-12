@@ -45,9 +45,10 @@ public:
     static inline thrust::device_vector<float4>::iterator GetDirections(Iterator rays) { return GetAxisUVs(rays); }
         
 
-    Rays(const size_t capacity)
+    Rays(const size_t capacity, const Representation r = RayRepresentation)
         : origins(thrust::device_vector<float4>(capacity)),
-          axisUVs(thrust::device_vector<float4>(capacity)) {}
+          axisUVs(thrust::device_vector<float4>(capacity)),
+          representation(r) {}
 
     /**
      * Creates the rays.

@@ -134,7 +134,6 @@ std::string Rays::ToString() const {
     if (representation == RayRepresentation)
         for (size_t i = 0; i < Size(); ++i)
             out << "\n" << GetAsRay(i);
-    
     else if (representation == HyperRayRepresentation)
         for (size_t i = 0; i < Size(); ++i)
             out << "\n" << GetAsHyperRay(i);
