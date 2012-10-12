@@ -136,10 +136,10 @@ void PathTraceKernel(float4* rayOrigins,
     const Sphere sphere = spheres[hitID];
 
     const float3 hitPos = t * dir + rayOrigin; // we could store hitPos in the rays origin, since we should already know it from the intersection test.
-    float3 norm = normalize(hitPos - sphere.center);
-    const bool into = dot(norm, dir) > 0.0f;
-    norm = into ? norm * -1.0f : norm;
-    
+    const float3 sphereNorm = normalize(hitPos - sphere.center); // The sphere's normal, pointing away from the center.
+    const bool into = dot(sphereNorm, dir) < 0.0f;
+    const float3 rayNorm = into ? sphereNorm : sphereNorm*-1.0f; // May flip the normal so it doesn't point away from the ray.
+
     Random rand = Random::Create1D(seed);
     
     float colorContribution = 0.0f;
@@ -147,21 +147,21 @@ void PathTraceKernel(float4* rayOrigins,
     // TODO add reflection and refraction
     if (rand.NextFloat01() < emission_reflection.w) {
         // ray is reflected
-        dir = dir - norm * 2 * dot(norm, dir);
+        dir = dir - rayNorm * 2.0f * dot(rayNorm, dir);
     } else if (rand.NextFloat01() < color_refractions[matID].w){
-        float3 reflect = dir - norm * 2.0f * dot(norm, dir);
+        float3 reflect = dir - rayNorm * 2.0f * dot(rayNorm, dir);
         
         // Pure magic 'borrowed' from smallpt
         float nc = 1.0f, nt = 1.5f;
         float nnt = into ? nc/nt : nt/nc;
-        float ddn = dot(dir, norm);
+        float ddn = dot(dir, rayNorm);
         float cos2t = 1.0f - nnt * nnt * (1.0f - ddn * ddn);
         
         if (cos2t < 0.0f) {
             dir = reflect;
         } else {
-            float3 tDir = normalize(dir * nnt - norm * (ddn*nnt+sqrt(cos2t)));
-            float a=nt-nc, b=nt+nc, R0=a*a/(b*b), c = 1-(into?-ddn : dot(tDir, norm)); // TODO This norm is actually flipped. Does it matter?
+            float3 tDir = normalize(dir * nnt - rayNorm * (ddn*nnt+sqrt(cos2t)));
+            float a=nt-nc, b=nt+nc, R0=a*a/(b*b), c = 1-(into?-ddn : dot(tDir, sphereNorm));
             float Re=R0+(1-R0)*c*c*c*c*c;
             float P = 0.25f + 0.5f * Re; 
             // float Tr = 1.0f - Re;
@@ -180,9 +180,9 @@ void PathTraceKernel(float4* rayOrigins,
         const float r2 = rand.NextFloat01();
         const float r2s = sqrtf(r2);
         // Tangent space ?
-        const float3 w = norm;
+        const float3 w = rayNorm;
         const float3 u = normalize(fabsf(w.x) > 0.1f ? 
-                               make_float3(0,1,0) : 
+                                   make_float3(0,1,0) : 
                                    cross(make_float3(1,0,0), w));
         const float3 v = cross(w, u);
         dir = normalize(u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrtf(1.0f-r2));
@@ -191,8 +191,10 @@ void PathTraceKernel(float4* rayOrigins,
     const float4 color_refraction = color_refractions[matID];
     emission_bounces[fragID] = emission_bounce + make_float4(colorContribution * oldF * make_float3(emission_reflection), 1.0f);
     fs[fragID] = make_float4(oldF * make_float3(color_refraction), 0.0f);
-        
-    rayOrigins[rayID] = make_float4(hitPos + norm * 0.02f, fragID);
+    
+    
+    bool refract = dot(rayNorm, dir) < 0.0f;
+    rayOrigins[rayID] = make_float4(hitPos + rayNorm * (refract ? -0.02f : 0.02f), fragID);
     rayDirections[rayID] = make_float4(dir, 0.0f);
     
     hitIDs[rayID] = 1; // Note that this ray should not be terminated. TODO
