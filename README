@@ -13,10 +13,6 @@ DONE
 
 Sort rays directly, not indices to avoid non-coallesced memory access (DONE)
 
-Can we remove owners from rays and spheres? For the final coloring, the
-owners can be created with just one scan. Try it out and then perhaps add a
-work queue instead for calculating splitting sides.
-
 Don't do full leaf moved left/right arrays. Just do it for the nodes and then
 calculate the ray/sphere left/right leaf position after that using their
 index. This means we can do our inclusive_scan's over the nodes instead or
@@ -27,12 +23,11 @@ atomic operation. Then update the current ray owner afterwards. This can
 either be done atomic or not. In any case if it isn't done at the exact same
 time as the work index, the threads can simply iterate upwards until they find
 the correct dacrtnode which owns the ray (this will need to be done anyway)
-RESULT
-It seems that scan + operation is faster than a workqueue. Given everyones
-obsession with work queues this may just be a problem with my old GPU, but I
-need to test it further. The test case can be found in DacrtNode.  The atomic
-operation may be a major bottleneck, it is lower on newer architctures, but
-for my 1.2 it may just be too slow.
+- It seems that scan + operation is faster than a workqueue. Given everyones
+  obsession with work queues this may just be a problem with my old GPU, but I
+  need to test it further. The test case can be found in DacrtNode.  The atomic
+  operation may be a major bottleneck, it is lower on newer architctures, but
+  for my 1.2 it may just be too slow.
 
 Partition rays based on the geom bounds aswell? Perhaps do one or the other
 depending on some ray/geom ratio or based on how much a ray cone overlaps
@@ -43,21 +38,44 @@ at the same time. It also means I can partition geometry based on it's
 distance to the cone apex, store the begin/end indices in a node and then
 later resume from that node.
 
-TODO
-
-Partition rays by soring them according to their 5D Morton Curve, then
-corrospondingly partition the geometry spatially. Perhaps do 5-10bit morton
-curves for the geometry to create the tree faster without creating too many leaf
-cells.
-
 Is it possible to encode the MortonBounds of any 2 mortoncodes that share the
 first n most significant bits. If possibly then I wouldn't have to constantly
 reduce the bounds for each geometry partition iteration. (All values inside the
 bound share the same first n bits, so these can be ignored. Can I assume
 something about the lower 32-n bits? Are they all 1's and 0's (or close enough)
-or can express enough information with just the N'th bit?)
+or can express enough information with just the N'th bit?) 
+- Yes! It is possible to find the lowest common bound of two morton codes. This
+  is done by taking the most significant N bits that the two codes agree upon
+  and filling the rest with 0 for min and 1 for max, corrosponding to a minimum
+  and maximum path.
 
-Can we do ray partitioning without converting them to hyper rays? 
+Partition rays by sorting them according to their 5D Morton Curve, then
+corrospondingly partition the geometry spatially.
+- This is done in MortonDacrtNode and works splendidly.
+
+Reducing the size of the hypercube is what's most expensive by far when
+performing a DACRT step. How about only using every n'th ray to compute it
+instead of all of them? Say maximum 2048 rays pr cone. That would reduce cost
+drastically. Can I do this in a statistically sound way? Random isn't exactly
+cheap you know. And how much of an impact will it have when doing packet
+tracing?
+- This has been scrapped in favor of of sorting the rays along a morton
+  curve. This allows me to lookup the lowest common morton encoded bound of a
+  partition in constant time. The bounds are nowhere near as tight as actually
+  reducing them, but it appears to be a lot faster.
+
+Move randomly generated numbers to the GPU
+- Done! This is done using a linear congruential generator, x = (Ax + C) % M,
+  which is seeded by a global seed and a hashed local thread id. It both removes
+  the memory overhead of generating a ton of random numbers on the CPU and
+  storing them on the GPU, plus it increases speed by removing a giant memory
+  transaction.
+
+
+
+TODO
+
+DacrtNode: Can we do ray partitioning without converting them to hyper rays? 
 - Sort them by major axis.
 - Extend all ray dirs, so their major axis has length 1.0f? Then the split
 - will never be performed along that axis.
@@ -69,28 +87,8 @@ Can we do ray partitioning without converting them to hyper rays?
 - Proceed as usual with plane creation and intersection (but now without the
   constant conversion trough a switch)
 
-Try different ray partitionings. The easiest is just a raw left-right
-partition, but one that partitions rays spatially may perform better. (i.e
-place the two children of a parent ray partition next to each other in
-memory)
-If I do this then I need to do the same for dacrtnodes, so the nodes still
-follow an increasing partition layout.
-Can I avoid a leaf buffer if I do this? So the rays would be stored in a
-stenciled layout, like | INNER | LEAF | INNER | INNER |. How would I process
-this? Parallelizing over all N rays when only 20% are left is a waste. If I
-do this then it may make it easier to group similar rays in packets, as they
-will be located next to each other in memory.
-
-Reducing the size of the hypercube is what's most expensive by far. How about
-only using every n'th ray to compute it instead of all of them? Say maximum 2048
-rays pr cone. That would reduce cost drastically. Can I do this in a
-statistically sound way? Random isn't exactly cheap you know. And how much of an
-impact will it have when doing packet tracing?
-
 The left/right indice arrays also encode the left/right side info. Can we use
 this instead of the PartitionSide arrays to save memory? Will it be just as fast?
-
-Move randomly generated numbers to the GPU
 
 Amortise geometry sorting cost by using a morton curve subdivision (everyone
 else is anyway)
@@ -98,5 +96,6 @@ else is anyway)
 Amortise ray sorting cost by storing them in pixelwide packets (packets are
 always crap at the N'th trace, can we dynamically sort them semi optimal?)
 
-When only a few rays remain, don't paralize intersection over all rays, but
-do it over geometry instead. (Not an issue as long as I'm doing my fixed bounce pathtracer)
+When only a few rays remain, don't parallellize intersection over all rays, but
+do it over geometry instead. (Not an issue as long as I'm doing my fixed bounce
+pathtracer)
