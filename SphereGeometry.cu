@@ -29,15 +29,16 @@ std::string SphereGeometry::ToString() const {
 
 SpheresGeometry SpheresGeometry::CornellBox(const int n) {
     // Create materials
-    Materials mats(6);
-    mats.Resize(6);
+    Materials mats(7);
     float3 zero3 = make_float3(0.0f, 0.0f, 0.0f);
+    float3 gold = make_float3(0.8314f, 0.6863f, 0.2157f);
     mats.Set(0, Material(zero3, make_float3(0.75f, 0.75f, 0.75f), 0.0f, 0.0f)); // light grey
     mats.Set(1, Material(zero3, make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red wall
     mats.Set(2, Material(zero3, make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue wall
     mats.Set(3, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 0.0f, 1.0f)); // glass ball
     mats.Set(4, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 1.0f, 0.0f)); // mirror ball
     mats.Set(5, Material(make_float3(12.0f,12.0f,12.0f), zero3, 0.0f, 0.0f)); // light
+    mats.Set(6, Material(zero3, gold, 0.3f, 0.0f)); // gold
 
     // Create geometry
     thrust::host_vector<Sphere> hSpheres(9 + n);
@@ -56,6 +57,7 @@ SpheresGeometry SpheresGeometry::CornellBox(const int n) {
         float radius = 1.25f + 1.75f * Rand01();
         float3 center = make_float3(10.0f + Rand01() * 80.0 , Rand01() * 80.0 , Rand01() * 100.0 + 50.0);
         hSpheres[9 + s] = Sphere(center, radius);
+        hMatIDs[9 + s] = 6;
     }
     
     AABB bounds = AABB::Create(make_float3(1.0f, 0.0f, 0.0f), 
