@@ -15,28 +15,26 @@ class RayContainer {
 private:
     Rays innerRays;
     Rays nextRays;
-    Rays leafRays;
     unsigned int nLeafRays;
 
 public:
     RayContainer(const int width, const int height, const int sqrtSamples)
         : innerRays(width, height, sqrtSamples), 
           nextRays(innerRays.Size()), 
-          leafRays(innerRays.Size()),
           nLeafRays(0) {
-        nextRays.Resize(0); leafRays.Resize(0);
+        nextRays.Resize(0);
     }
 
     void Clear();
 
-    inline Rays::Iterator BeginInnerRays() { return innerRays.Begin(); }
+    inline Rays::Iterator BeginInnerRays() { return innerRays.Begin() + nLeafRays; }
     inline Rays::Iterator EndInnerRays() { return innerRays.End(); }
-    inline unsigned int InnerSize() const { return innerRays.Size(); }
+    inline unsigned int InnerSize() const { return innerRays.Size() - nLeafRays; }
 
-    inline Rays::Iterator BeginLeafRays() { return leafRays.Begin(); }
-    inline Rays::Iterator EndLeafRays() { return leafRays.End(); }
+    inline Rays::Iterator BeginLeafRays() { return innerRays.Begin(); }
+    inline Rays::Iterator EndLeafRays() { return innerRays.Begin() + nLeafRays; }
     inline unsigned int LeafRays() const { return nLeafRays; }
-    inline Ray GetLeafRay(const size_t r) const { return leafRays.GetAsRay(r); }
+    inline Ray GetLeafRay(const size_t r) const { return innerRays.GetAsRay(r); }
 
     /**
      * Converts the rays to a hyperray representation.

@@ -22,14 +22,12 @@
 void RayContainer::Clear() {
     innerRays.Resize(0);
     nextRays.Resize(0);
-    leafRays.Resize(0);
     nLeafRays = 0;
 }
 
 void RayContainer::Convert(const Rays::Representation r) {
     innerRays.Convert(r);
     nextRays.Convert(r);
-    leafRays.Convert(r);
 }
 
 template<int A>
@@ -60,10 +58,10 @@ __constant__ unsigned int d_raysMovedLeft;
 struct PartitionLeft {
     float4 *nextOrigins, *nextAxisUVs;
 
-    PartitionLeft(Rays& nextRays,
+    PartitionLeft(Rays::Iterator nextRays,
                   thrust::device_vector<unsigned int>& leftIndices) 
-        : nextOrigins(RawPointer(nextRays.origins)), 
-          nextAxisUVs(RawPointer(nextRays.axisUVs)) {
+        : nextOrigins(RawPointer(Rays::GetOrigins(nextRays))), 
+          nextAxisUVs(RawPointer(Rays::GetDirections(nextRays))) {
         unsigned int* data = RawPointer(leftIndices) + leftIndices.size()-1;
         cudaMemcpyToSymbol(d_raysMovedLeft, (void*)data, sizeof(unsigned int), 0, cudaMemcpyDeviceToDevice);
     }
@@ -84,15 +82,15 @@ struct PartitionLeft {
 
 void RayContainer::Partition(thrust::device_vector<PartitionSide>& partitionSides, thrust::device_vector<unsigned int>& leftIndices) {
 
-    const size_t nextSize = leftIndices.size() - 1; // -1 since last element is the total number of rays moved left
-    nextRays.Resize(nextSize);
+    const size_t nNextSize = leftIndices.size() - 1; // -1 since last element is the total number of rays moved left
+    nextRays.Resize(nNextSize + nLeafRays);
 
     thrust::zip_iterator<thrust::tuple<PartitionSideIterator, UintIterator, Rays::Iterator> > input
         = thrust::make_zip_iterator(thrust::make_tuple(partitionSides.begin(), leftIndices.begin(),
-                                                       innerRays.Begin()));
+                                                       BeginInnerRays()));
 
-    PartitionLeft partitionLeft(nextRays, leftIndices);
-    thrust::transform(input, input + nextSize, thrust::counting_iterator<unsigned int>(0), 
+    PartitionLeft partitionLeft(nextRays.Begin() + nLeafRays, leftIndices);
+    thrust::transform(input, input + nNextSize, thrust::counting_iterator<unsigned int>(0), 
                       leftIndices.begin(), partitionLeft);
 
     innerRays.Swap(nextRays);
@@ -109,15 +107,14 @@ struct PartitionLeafsK {
     uint2* nodePartitions;
     unsigned int* nodeLeafIndices;
     
-    PartitionLeafsK(Rays& nextRays, Rays& leafRays,
+    PartitionLeafsK(Rays::Iterator nextRays, Rays::Iterator leafRays,
                     thrust::device_vector<bool>& lMarkers,
                     thrust::device_vector<uint2>& nPartitions,
-                    thrust::device_vector<unsigned int>& nlIndices,
-                    const unsigned int nLeafRays)
-        : nextOrigins(RawPointer(nextRays.origins)), 
-          nextAxisUVs(RawPointer(nextRays.axisUVs)),
-          leafOrigins(RawPointer(leafRays.origins) + nLeafRays), 
-          leafAxisUVs(RawPointer(leafRays.axisUVs) + nLeafRays),
+                    thrust::device_vector<unsigned int>& nlIndices)
+        : nextOrigins(RawPointer(Rays::GetOrigins(nextRays))), 
+          nextAxisUVs(RawPointer(Rays::GetDirections(nextRays))), 
+          leafOrigins(RawPointer(Rays::GetOrigins(leafRays))), 
+          leafAxisUVs(RawPointer(Rays::GetDirections(leafRays))), 
           leafMarkers(RawPointer(lMarkers)),
           nodePartitions(RawPointer(nPartitions)),
           nodeLeafIndices(RawPointer(nlIndices)) {}
@@ -151,16 +148,27 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
                                   thrust::device_vector<unsigned int>& owners) {
 
     const unsigned int nNewLeafs = leafNodeIndices[leafNodeIndices.size()-1];
-    nextRays.Resize(innerRays.Size() - nNewLeafs); // shrink next ray buffer
-    leafRays.Resize(nLeafRays + nNewLeafs); // expand leaf
+    nextRays.Resize(innerRays.Size()); // Just to be sure.
     
     thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > input =
         thrust::make_zip_iterator(thrust::make_tuple(owners.begin(), BeginInnerRays()));
 
-    PartitionLeafsK partitionLeafs(nextRays, leafRays, isLeaf, rayPartitions, leafNodeIndices, nLeafRays);
+    PartitionLeafsK partitionLeafs(nextRays.Begin() + nLeafRays + nNewLeafs, 
+                                   nextRays.Begin() + nLeafRays, 
+                                   isLeaf, rayPartitions, leafNodeIndices);
     thrust::transform(input, input + InnerSize(), thrust::counting_iterator<unsigned int>(0),
                       owners.begin(), partitionLeafs);
     // std::cout << "index moved to:\n" << owners << std::endl;
+
+    // Copy leaf rays from nextRays back into innerRays
+    cudaMemcpy(RawPointer(Rays::GetOrigins(BeginInnerRays())),
+               RawPointer(Rays::GetOrigins(nextRays.Begin() + nLeafRays)),
+               sizeof(float4) * nNewLeafs, cudaMemcpyDeviceToDevice);
+    CHECK_FOR_CUDA_ERROR();
+    cudaMemcpy(RawPointer(Rays::GetDirections(BeginInnerRays())),
+               RawPointer(Rays::GetDirections(nextRays.Begin() + nLeafRays)),
+               sizeof(float4) * nNewLeafs, cudaMemcpyDeviceToDevice);
+    CHECK_FOR_CUDA_ERROR();
 
     innerRays.Swap(nextRays);
 
@@ -174,22 +182,19 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
 
     thrust::sort_by_key(keysBegin, keysEnd, BeginInnerRays());
 
-    leafRays.Swap(innerRays);
-    nLeafRays = leafRays.Size();
-    innerRays.Resize(0);
+    nLeafRays = keysEnd - keysBegin;
 }
 
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
-    innerRays.Resize(LeafRays());
-    
     Rays::Iterator end = 
-        thrust::remove_copy_if(leafRays.Begin(), leafRays.End(), terminated.begin(), 
-                               innerRays.Begin(), thrust::logical_not<unsigned int>());
+        thrust::remove_copy_if(BeginLeafRays(), EndLeafRays(), terminated.begin(), 
+                               nextRays.Begin(), thrust::logical_not<unsigned int>());
     
-    size_t innerSize = end - innerRays.Begin();
+    size_t innerSize = end - nextRays.Begin();
+    innerRays.Swap(nextRays);
     innerRays.Resize(innerSize);
+    nextRays.Resize(innerSize);
 
-    leafRays.Resize(0);
     nLeafRays = 0;
 }
 
@@ -200,9 +205,9 @@ std::string RayContainer::ToString() const {
         for (size_t i = 0; i < InnerSize(); ++i) {
             out << "\n" << i << ": ";
             if (innerRays.GetRepresentation() == Rays::RayRepresentation)
-                out << innerRays.GetAsHyperRay(i) ;
+                out << innerRays.GetAsHyperRay(i+LeafRays()) ;
             else 
-                out << innerRays.GetAsRay(i);
+                out << innerRays.GetAsRay(i+LeafRays());
         }
         if (LeafRays() > 0) out << "\n";
     }
@@ -210,10 +215,10 @@ std::string RayContainer::ToString() const {
         out << "Leaf rays (" << LeafRays() << "):";
         for (size_t i = 0; i < LeafRays(); ++i) {
             out << "\n" << i << ": ";
-            if (leafRays.GetRepresentation() == Rays::RayRepresentation) 
-                out << leafRays.GetAsHyperRay(i);
+            if (innerRays.GetRepresentation() == Rays::RayRepresentation) 
+                out << innerRays.GetAsHyperRay(i);
             else 
-                out << leafRays.GetAsRay(i);
+                out << innerRays.GetAsRay(i);
         }
     }
     return out.str();
