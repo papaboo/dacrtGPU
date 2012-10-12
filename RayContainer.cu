@@ -186,6 +186,8 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
 }
 
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
+    nextRays.Resize(terminated.size());
+    
     Rays::Iterator end = 
         thrust::remove_copy_if(BeginLeafRays(), EndLeafRays(), terminated.begin(), 
                                nextRays.Begin(), thrust::logical_not<unsigned int>());
