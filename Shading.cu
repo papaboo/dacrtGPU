@@ -162,10 +162,10 @@ void PathTraceKernel(float4* rayOrigins,
             float3 tDir = normalize(dir * nnt - rayNorm * (ddn*nnt+sqrt(cos2t)));
             float a=nt-nc, b=nt+nc, R0=a*a/(b*b), c = 1-(into?-ddn : dot(tDir, sphereNorm));
             float Re=R0+(1-R0)*c*c*c*c*c;
-            float P = 0.25f + 0.5f * Re; 
+            // float P = 0.25f + 0.5f * Re; 
             // float Tr = 1.0f - Re;
             // float RP = Re / P, TP = Tr / (1.0f-P);
-            if (rand.NextFloat01() < P) // reflection
+            if (rand.NextFloat01() < Re) // reflection
                 dir = reflect;
             else 
                 dir = tDir;
