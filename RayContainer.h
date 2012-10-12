@@ -12,18 +12,18 @@
 #include <Rays.h>
 
 class RayContainer {
-public:
-    Rays innerRays;
 private:
+    Rays innerRays;
     Rays nextRays;
-public:
     Rays leafRays;
+    unsigned int nLeafRays;
 
 public:
     RayContainer(const int width, const int height, const int sqrtSamples)
         : innerRays(width, height, sqrtSamples), 
           nextRays(innerRays.Size()), 
-          leafRays(innerRays.Size()) {
+          leafRays(innerRays.Size()),
+          nLeafRays(0) {
         nextRays.Resize(0); leafRays.Resize(0);
     }
 
@@ -35,7 +35,7 @@ public:
 
     inline Rays::Iterator BeginLeafRays() { return leafRays.Begin(); }
     inline Rays::Iterator EndLeafRays() { return leafRays.End(); }
-    inline unsigned int LeafRays() const { return leafRays.Size(); }
+    inline unsigned int LeafRays() const { return nLeafRays; }
     inline Ray GetLeafRay(const size_t r) const { return leafRays.GetAsRay(r); }
 
     /**

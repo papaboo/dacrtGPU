@@ -22,8 +22,8 @@
 void RayContainer::Clear() {
     innerRays.Resize(0);
     nextRays.Resize(0);
-    
     leafRays.Resize(0);
+    nLeafRays = 0;
 }
 
 void RayContainer::Convert(const Rays::Representation r) {
@@ -62,9 +62,9 @@ struct PartitionLeft {
 
     PartitionLeft(Rays& nextRays,
                   thrust::device_vector<unsigned int>& leftIndices) 
-        : nextOrigins(thrust::raw_pointer_cast(nextRays.origins.data())), 
-          nextAxisUVs(thrust::raw_pointer_cast(nextRays.axisUVs.data())) {
-        unsigned int* data = thrust::raw_pointer_cast(leftIndices.data()) + leftIndices.size()-1;
+        : nextOrigins(RawPointer(nextRays.origins)), 
+          nextAxisUVs(RawPointer(nextRays.axisUVs)) {
+        unsigned int* data = RawPointer(leftIndices) + leftIndices.size()-1;
         cudaMemcpyToSymbol(d_raysMovedLeft, (void*)data, sizeof(unsigned int), 0, cudaMemcpyDeviceToDevice);
     }
 
@@ -94,13 +94,12 @@ void RayContainer::Partition(thrust::device_vector<PartitionSide>& partitionSide
     PartitionLeft partitionLeft(nextRays, leftIndices);
     thrust::transform(input, input + nextSize, thrust::counting_iterator<unsigned int>(0), 
                       leftIndices.begin(), partitionLeft);
-    CHECK_FOR_CUDA_ERROR(); 
 
     innerRays.Swap(nextRays);
 }
 
 
-struct PartitionLeafsKernel {
+struct PartitionLeafsK {
     // Rays
     float4 *nextOrigins, *nextAxisUVs;
     float4 *leafOrigins, *leafAxisUVs;
@@ -110,18 +109,18 @@ struct PartitionLeafsKernel {
     uint2* nodePartitions;
     unsigned int* nodeLeafIndices;
     
-    PartitionLeafsKernel(Rays& nextRays, Rays& leafRays,
-                         thrust::device_vector<bool>& lMarkers,
-                         thrust::device_vector<uint2>& nPartitions,
-                         thrust::device_vector<unsigned int>& nlIndices,
-                         const unsigned int leafIndexOffset)
-        : nextOrigins(thrust::raw_pointer_cast(nextRays.origins.data())), 
-          nextAxisUVs(thrust::raw_pointer_cast(nextRays.axisUVs.data())),
-          leafOrigins(thrust::raw_pointer_cast(leafRays.origins.data()) + leafIndexOffset), 
-          leafAxisUVs(thrust::raw_pointer_cast(leafRays.axisUVs.data()) + leafIndexOffset),
-          leafMarkers(thrust::raw_pointer_cast(lMarkers.data())),
-          nodePartitions(thrust::raw_pointer_cast(nPartitions.data())),
-          nodeLeafIndices(thrust::raw_pointer_cast(nlIndices.data())) {}
+    PartitionLeafsK(Rays& nextRays, Rays& leafRays,
+                    thrust::device_vector<bool>& lMarkers,
+                    thrust::device_vector<uint2>& nPartitions,
+                    thrust::device_vector<unsigned int>& nlIndices,
+                    const unsigned int nLeafRays)
+        : nextOrigins(RawPointer(nextRays.origins)), 
+          nextAxisUVs(RawPointer(nextRays.axisUVs)),
+          leafOrigins(RawPointer(leafRays.origins) + nLeafRays), 
+          leafAxisUVs(RawPointer(leafRays.axisUVs) + nLeafRays),
+          leafMarkers(RawPointer(lMarkers)),
+          nodePartitions(RawPointer(nPartitions)),
+          nodeLeafIndices(RawPointer(nlIndices)) {}
     
     __host__ __device__
     unsigned int operator()(const thrust::tuple<unsigned int, thrust::tuple<float4, float4> > input, // owner, ray
@@ -151,26 +150,14 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
                                   thrust::device_vector<uint2>& rayPartitions,
                                   thrust::device_vector<unsigned int>& owners) {
 
-    /*
-    std::cout << "--PartitionLeafs--:" << std::endl;
-    std::cout << "isLeaf:\n" << isLeaf << std::endl;
-    std::cout << "leafNodeIndices:\n" << leafNodeIndices << std::endl;
-    std::cout << "rayPartitions:\n" << rayPartitions << std::endl;
-    std::cout << "owners:\n" << owners << std::endl;
-    std::cout << ToString() << std::endl;
-    */
-
-    const unsigned int newLeafs = leafNodeIndices[leafNodeIndices.size()-1];
-    const unsigned int prevLeafIndiceAmount = leafRays.Size();
-    nextRays.Resize(innerRays.Size() - newLeafs); // shrink next ray buffer
-    leafRays.Resize(leafRays.Size() + newLeafs); // expand leaf
+    const unsigned int nNewLeafs = leafNodeIndices[leafNodeIndices.size()-1];
+    nextRays.Resize(innerRays.Size() - nNewLeafs); // shrink next ray buffer
+    leafRays.Resize(nLeafRays + nNewLeafs); // expand leaf
     
-    // TODO replace owners with work queue
-
     thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > input =
         thrust::make_zip_iterator(thrust::make_tuple(owners.begin(), BeginInnerRays()));
 
-    PartitionLeafsKernel partitionLeafs(nextRays, leafRays, isLeaf, rayPartitions, leafNodeIndices, prevLeafIndiceAmount);
+    PartitionLeafsK partitionLeafs(nextRays, leafRays, isLeaf, rayPartitions, leafNodeIndices, nLeafRays);
     thrust::transform(input, input + InnerSize(), thrust::counting_iterator<unsigned int>(0),
                       owners.begin(), partitionLeafs);
     // std::cout << "index moved to:\n" << owners << std::endl;
@@ -178,6 +165,8 @@ void RayContainer::PartitionLeafs(thrust::device_vector<bool>& isLeaf,
     innerRays.Swap(nextRays);
 
     // std::cout << ToString() << std::endl;
+    
+    nLeafRays += nNewLeafs;
 }
 
 void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator keysBegin,
@@ -185,8 +174,8 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
 
     thrust::sort_by_key(keysBegin, keysEnd, BeginInnerRays());
 
-    // TODO This will be a lot faster once leafs are just the first 'n' rays in innerRays.
     leafRays.Swap(innerRays);
+    nLeafRays = leafRays.Size();
     innerRays.Resize(0);
 }
 
@@ -201,6 +190,7 @@ void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& termina
     innerRays.Resize(innerSize);
 
     leafRays.Resize(0);
+    nLeafRays = 0;
 }
 
 std::string RayContainer::ToString() const {
