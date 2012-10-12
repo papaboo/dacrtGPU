@@ -568,7 +568,7 @@ struct IsNodeLeaf {
         const float rayCount = (float)(rayPartition.y - rayPartition.x);
         const float sphereCount = (float)(spherePartition.y - spherePartition.x);
         
-        return rayCount * sphereCount <= 16.0f * (rayCount + sphereCount);
+        return rayCount * sphereCount <= 32.0f * (rayCount + sphereCount);
     }
 };
 
@@ -719,18 +719,17 @@ struct ExhaustiveIntersection {
 
     unsigned int *hitIDs;
     
-    ExhaustiveIntersection(Rays& rays, 
+    ExhaustiveIntersection(Rays::Iterator raysBegin, 
                            thrust::device_vector<uint2>& sPartitions,
                            thrust::device_vector<unsigned int>& sIndices, 
                            thrust::device_vector<Sphere>& ss,
                            thrust::device_vector<unsigned int>& hits)
-        : rayOrigins(thrust::raw_pointer_cast(rays.origins.data())),
-          rayAxisUVs(thrust::raw_pointer_cast(rays.axisUVs.data())),
-          spherePartitions(thrust::raw_pointer_cast(sPartitions.data())), 
-          sphereIndices(thrust::raw_pointer_cast(sIndices.data())), 
-          spheres(thrust::raw_pointer_cast(ss.data())),
-          hitIDs(thrust::raw_pointer_cast(hits.data()))
-    {}
+        : rayOrigins(RawPointer(Rays::GetOrigins(raysBegin))),
+          rayAxisUVs(RawPointer(Rays::GetDirections(raysBegin))),
+          spherePartitions(RawPointer(sPartitions)), 
+          sphereIndices(RawPointer(sIndices)), 
+          spheres(RawPointer(ss)),
+          hitIDs(RawPointer(hits)) {}
 
     /**
      * Takes a ray as argument and intersects it against all spheres referenced
@@ -771,7 +770,7 @@ void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& sphere
 
     // std::cout << "doneRayPartitions:\n" << doneRayPartitions <<std::endl;
 
-    ExhaustiveIntersection exhaustive(rays.leafRays, 
+    ExhaustiveIntersection exhaustive(rays.BeginLeafRays(), 
                                       doneSpherePartitions, 
                                       spheres.doneIndices, 
                                       spheres.spheres.spheres,
