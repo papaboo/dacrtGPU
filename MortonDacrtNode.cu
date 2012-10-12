@@ -137,8 +137,6 @@ struct RayMortonCoder {
     }
 };
 
-void TestMortonEncoding();
-
 struct InvalidAxis {
     __host__ __device__
     inline bool operator()(const MortonBound b) const {
@@ -436,8 +434,6 @@ void CreateNextPartitionings(const uint2* const partitionings, // active partiti
 void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spheres) {
     rays = &rayContainer;
     spheresGeom = &spheres;
-    
-    // TestMortonEncoding();
     
     // This should actually be of type MortonCode, but I leave it as unsigned
     // int so thrust can use radix sort.
