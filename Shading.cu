@@ -144,7 +144,6 @@ void PathTraceKernel(float4* rayOrigins,
     
     float colorContribution = 0.0f;
 
-    // TODO add reflection and refraction
     if (rand.NextFloat01() < emission_reflection.w) {
         // ray is reflected
         dir = dir - rayNorm * 2.0f * dot(rayNorm, dir);
