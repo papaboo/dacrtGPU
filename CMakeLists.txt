@@ -7,8 +7,8 @@ IF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
   ADD_DEFINITIONS(-m32 -Wall -Wextra -Wno-unused-parameter)
   SET (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}  -m32")
   SET(CUDA_64_BIT_DEVICE_CODE OFF)
-  #  ADD_DEFINITIONS(-DTHRUST_DEBUG=1)
-  ADD_DEFINITIONS(-o2)
+  ADD_DEFINITIONS(-DTHRUST_DEBUG=1)
+  # ADD_DEFINITIONS(-o2)
 ENDIF(${CMAKE_CXX_COMPILER_ID} MATCHES Clang)
 
 INCLUDE_DIRECTORIES(.)
@@ -35,12 +35,14 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   Meta/CUDA.cu
   MortonDacrtNode.h
   MortonDacrtNode.cu
+  Primitives/AABB.h
   Primitives/Cone.h
   Primitives/HyperCube.h
   Primitives/HyperRay.h
   Primitives/MortonCode.h
   Primitives/Ray.h
   Primitives/Sphere.h
+  Primitives/SphereCone.h
   RayContainer.h
   RayContainer.cu
   Rays.h
