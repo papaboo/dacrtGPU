@@ -256,7 +256,7 @@ struct CreateHyperCubesFromBounds {
         : rayMortonCoder(rMC) {}
 
     __host__ __device__
-    thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> operator()(const MortonBound bound) const {
+    inline thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> operator()(const MortonBound bound) const {
         HyperCube cube = rayMortonCoder.HyperCubeFromBound(bound);
         
         return thrust::tuple<SignedAxis, float2, float2, float2, float2, float2>
@@ -264,11 +264,25 @@ struct CreateHyperCubesFromBounds {
     }
 };
 
-struct CreateCones {
+struct CreateConesFromHypercubes {
     __host__ __device__
-    Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
+    inline Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
         const HyperCube cube(thrust::get<0>(c), thrust::get<1>(c), thrust::get<2>(c),
                              thrust::get<3>(c), thrust::get<4>(c), thrust::get<5>(c));
+        
+        return Cone::FromCube(cube);
+    }
+};
+
+struct CreateConesFromBounds {
+    RayMortonCoder rayMortonCoder;
+    
+    CreateConesFromBounds(const RayMortonCoder& rMC)
+        : rayMortonCoder(rMC) {}
+
+    __host__ __device__
+    inline Cone operator()(const MortonBound bound) const {
+        HyperCube cube = rayMortonCoder.HyperCubeFromBound(bound);
         
         return Cone::FromCube(cube);
     }
@@ -338,7 +352,7 @@ void SpherePartitioningByConesKernel(const unsigned int* const sphereIndices,
 
 struct BoolToUint {
     __host__ __device__
-    unsigned int operator()(const bool val) const { return val; }
+    inline unsigned int operator()(const bool val) const { return val; }
 };
 
 __global__
@@ -400,7 +414,7 @@ struct SpherePartitioningByCones {
 
 struct PartitionSideToUint2 {
     __host__ __device__
-    uint2 operator()(const PartitionSide side) const {
+    inline uint2 operator()(const PartitionSide side) const {
         return make_uint2(side & LEFT ? 1 : 0, 
                           side & RIGHT ? 1 : 0);
     }
@@ -507,7 +521,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     int counter = 0;
     while (spherePartitions.size() - leafNodes > 0) {
         ++counter;
-        cout << "*** ROUND " << counter << " - FIGHT ***\n" << endl;
+        //cout << "*** ROUND " << counter << " - FIGHT ***\n" << endl;
 
         // Create new ray partitions through binary search
         const size_t activeNodes = rayPartitions.size() - leafNodes;
@@ -536,15 +550,14 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
                           bounds.begin(), CreateBoundsFromPartitions(rayMortonCodes));
         // cout << "bounds:\n" << bounds << endl;
 
-        static HyperCubes hyperCubes(128); hyperCubes.Resize(bounds.size());
-        thrust::transform(bounds.begin(), bounds.end(), 
-                          hyperCubes.Begin(), CreateHyperCubesFromBounds(rayMortonCoder));
+        // static HyperCubes hyperCubes(128); hyperCubes.Resize(bounds.size());
+        // thrust::transform(bounds.begin(), bounds.end(), 
+        //                   hyperCubes.Begin(), CreateHyperCubesFromBounds(rayMortonCoder));
         // cout << hyperCubes << endl;
         
-        static thrust::device_vector<Cone> cones(hyperCubes.Size()); cones.resize(hyperCubes.Size());
-        thrust::transform(hyperCubes.Begin(), hyperCubes.End(), cones.begin(), CreateCones());
+        static thrust::device_vector<Cone> cones(bounds.size()); cones.resize(bounds.size());
+        thrust::transform(bounds.begin(), bounds.end(), cones.begin(), CreateConesFromBounds(rayMortonCoder));
         // cout << "cones:\n" << cones << endl;
-
 
         // Sphere's are partitioned | LEFT0 | RIGHT0 | LEFT1 | RIGHT1 | ....
         const unsigned int nActiveSpheres = sphereIndices.size() - leafSphereIndices;
@@ -789,7 +802,7 @@ bool MortonDacrtNodes::CreateLeafNodes(thrust::device_vector<unsigned int>& mort
     const size_t nActiveNodes = spherePartitions.size() - leafNodes;
     const size_t nActiveSphereIndices = sphereIndices.size() - leafSphereIndices;
     
-    cout << " --- Create leaf nodes from " << nActiveNodes << " active nodes and " << nActiveSphereIndices << " active sphere indices. ---\n" << endl;
+    // cout << " --- Create leaf nodes from " << nActiveNodes << " active nodes and " << nActiveSphereIndices << " active sphere indices. ---\n" << endl;
 
     // Locate leaf partitions
     static thrust::device_vector<bool> isLeaf(nActiveNodes);
@@ -1031,7 +1044,7 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
     sphereIndexPartition.resize(sphereIndices.size());
     
     thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be passed in from outside to save allocation and dealloc?
-    thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateCones());
+    thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateConesFromHypercubes());
 
     unsigned int spherePartitionPivots[cubes.Size() + 1];
     spherePartitionPivots[0] = 0;
