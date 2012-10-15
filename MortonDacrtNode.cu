@@ -510,8 +510,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     // sphereIndices = new SphereContainer(hCubes, spheres, spherePartitionPivots);
     // std::cout << sphereIndices->ToString() << std::endl;
 
-    // TODO Remove empty sphere partitions
-    
     // Geometry partition
     
     leafNodes = leafSphereIndices = 0;
