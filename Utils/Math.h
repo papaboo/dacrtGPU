@@ -11,7 +11,8 @@
 
 #include <cstdlib>
 
-#include <cutil_math.h>
+#include <math_functions.h>
+#include <Utils/helper_math.h> // Copied from <CUDA-DIR>/samples/common/inc/
 
 template <class T>
 __host__ __device__

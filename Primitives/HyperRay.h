@@ -11,8 +11,7 @@
 
 #include <Enums.h>
 #include <Utils/ToString.h>
-
-#include <cutil_math.h>
+#include <Utils/Math.h>
 
 #include <string>
 #include <sstream>

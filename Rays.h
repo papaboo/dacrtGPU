@@ -11,6 +11,7 @@
 
 #include <Primitives/HyperRay.h>
 #include <Primitives/Ray.h>
+#include <Utils/Math.h>
 #include <Utils/Utils.h>
 
 #include <ostream>
@@ -18,8 +19,6 @@
 #include <thrust/device_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
-
-#include <cutil_math.h>
 
 
 class Rays {

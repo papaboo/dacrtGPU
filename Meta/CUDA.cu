@@ -10,8 +10,8 @@
 #include <Utils/Utils.h>
 
 // One of these contain cutGetMaxGflopsDeviceId. No idea which (no internet)
-#include <cutil.h>
-#include <cutil_inline.h>
+// #include <cutil.h>
+// #include <cutil_inline.h>
 #include <cuda_runtime.h>
 #include <cuda_runtime_api.h>
 
@@ -27,7 +27,7 @@ void CUDA::Initialize() {
         exit(0);
     }
  
-    CUdevice device = cutGetMaxGflopsDeviceId();
+    int device = 0;
     cudaSetDevice(device);
     // cudaGLSetGLDevice(device);
     CHECK_FOR_CUDA_ERROR();

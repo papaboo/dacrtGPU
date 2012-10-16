@@ -11,7 +11,7 @@
 
 #include <Utils/ToString.h>
 
-#include <cutil_math.h>
+#include <math_functions.h>
 
 #include <sstream>
 #include <iomanip>

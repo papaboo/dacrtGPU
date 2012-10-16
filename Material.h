@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_MATERIAL_H_
 #define _GPU_DACRT_MATERIAL_H_
 
-#include <cutil_math.h>
+#include <Utils/Math.h>
 
 #include <thrust/device_vector.h>
 

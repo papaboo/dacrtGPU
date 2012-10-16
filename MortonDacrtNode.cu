@@ -234,7 +234,7 @@ struct CreateBoundsFromPartitions {
     }
     */
 
-    __host__ __device__
+    __device__
     MortonBound operator()(const uint2 rayPartition) const {
         const MortonCode min = rayMortonCodes[rayPartition.x];
         const MortonCode max = rayMortonCodes[rayPartition.y-1];

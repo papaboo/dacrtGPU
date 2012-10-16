@@ -19,7 +19,7 @@
 
 #include <ostream>
 
-#include <cutil_math.h>
+#include <builtin_types.h>
 
 class HyperCubes;
 class SphereContainer;

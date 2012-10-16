@@ -13,8 +13,6 @@
 #include <Primitives/Sphere.h>
 #include <Utils/Math.h>
 
-#include <cutil_math.h>
-
 #include <string>
 #include <sstream>
 #include <iomanip>

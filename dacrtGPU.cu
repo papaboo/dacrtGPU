@@ -32,12 +32,15 @@
 using std::cout;
 using std::endl;
 
+//const int WIDTH = 2, HEIGHT = 2;
 //const int WIDTH = 8, HEIGHT = 8;
 //const int WIDTH = 16, HEIGHT = 16;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
-const int WIDTH = 128, HEIGHT = 128;
+//const int WIDTH = 128, HEIGHT = 128;
 //const int WIDTH = 256, HEIGHT = 256;
+const int WIDTH = 512, HEIGHT = 512;
+//const int WIDTH = 1440, HEIGHT = 900;
 int sqrtSamples;
 int samples;
 
@@ -45,35 +48,38 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
     MortonDacrtNodes mNodes = MortonDacrtNodes(1);
+    unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
-        cout << "Rays this pass: " << rays.InnerSize() << endl;
+        cout << rays.InnerSize() << " rays for bounce " << (bounce+1) << endl;
 
         mNodes.Create(rays, spheres);
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
         mNodes.FindIntersections(hitIDs);
 
-        Shading::Normals(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
-                         spheres, rayFrags);
+        Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
+                       spheres, rayFrags);
 
         rays.RemoveTerminated(hitIDs);
+
+        ++bounce;
     }
 
-    /*    
+    /*
     DacrtNodes nodes = DacrtNodes(1);
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
-        cout << "Rays this pass: " << rays.InnerSize() << endl;
+        cout << rays.InnerSize() << " rays for bounce " << (bounce+1) << endl;
 
         nodes.Create(rays, spheres);
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
         nodes.ExhaustiveIntersect(rays, *(nodes.GetSphereIndices()), hitIDs);
 
-        Shading::Normals(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
-                         nodes.GetSphereIndices()->spheres, rayFrags);
+        Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
+                       nodes.GetSphereIndices()->spheres, rayFrags);
 
         rays.RemoveTerminated(hitIDs);
 
@@ -133,20 +139,21 @@ int main(int argc, char *argv[]){
     Fragments frags(WIDTH * HEIGHT * samples);
     thrust::device_vector<float4> colors(WIDTH * HEIGHT);
 
-    SpheresGeometry geom = SpheresGeometry::CornellBox(25); // 25
+    SpheresGeometry geom = SpheresGeometry::CornellBox(350);
     // cout << geom << endl;
 
     for (int i = 0; i < iterations; ++i) {
         // Reset fragments on subsequent iterations
         if (i > 0) frags.Reset();
-        
+
+        cout << "PASS " << (i+1) << endl;        
         RayTrace(frags, geom);
         
         float mod = float(i) / (i+1.0f);
         CombineFragsAndColor(frags, colors, samples, mod);
     }
 
-    SavePPM("planeimage.ppm", colors, WIDTH, HEIGHT);
+    SavePPM("image.ppm", colors, WIDTH, HEIGHT);
 
     return 0;
 }

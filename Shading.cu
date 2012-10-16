@@ -84,9 +84,9 @@ void Shading::Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd,
 }    
 
 
- // TODO Place all material parameters in a struct and create access methods for
- // it, so I don't have to extend the shade kernels each time I add a new
- // parameter.
+// TODO Place all material parameters in a struct and create access methods for
+// it, so I don't have to extend the shade kernels each time I add a new
+// parameter.
 __global__
 void PathTraceKernel(float4* rayOrigins,
                      float4* rayDirections,

@@ -281,7 +281,7 @@ struct CubesFromSplitPlanes {
         cudaMemcpyToSymbol(d_oldCubeCount, &oldCubeCount, sizeof(unsigned int));
     }
     
-    __host__ __device__
+    __device__
     thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> operator()(const unsigned int threadId) const {
         const unsigned int oldCubeId = threadId % d_oldCubeCount;
         const PartitionSide side = threadId < d_oldCubeCount ? LEFT : RIGHT;
@@ -607,7 +607,7 @@ struct NewPrimPartitions {
         cudaMemcpyToSymbol(d_leafPartitionOffset, &leafPartitionOffset, sizeof(unsigned int));
     }
     
-    __host__ __device__
+    __device__
     void operator()(const unsigned int threadId) const {
         const uint2 oldPartition = oldPartitions[threadId];
         const unsigned int range = oldPartition.y - oldPartition.x;

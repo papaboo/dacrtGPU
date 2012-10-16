@@ -9,9 +9,8 @@
 #ifndef _GPU_DACRT_RAY_H_
 #define _GPU_DACRT_RAY_H_
 
+#include <Utils/Math.h>
 #include <Utils/ToString.h>
-
-#include <cutil_math.h>
 
 #include <string>
 #include <sstream>
