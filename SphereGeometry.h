@@ -12,14 +12,13 @@
 #include <Material.h>
 #include <Primitives/AABB.h>
 #include <Primitives/Sphere.h>
+#include <Utils/Math.h>
 #include <Utils/Utils.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
 #include <ostream>
-
-#include <builtin_types.h>
 
 class HyperCubes;
 class SphereContainer;
