@@ -11,6 +11,7 @@
 #include <Fragment.h>
 #include <Meta/CUDA.h>
 #include <Primitives/Sphere.h>
+#include <RayContainer.h>
 #include <SphereGeometry.h>
 #include <Utils/Random.h>
 
@@ -83,6 +84,7 @@ void Shading::Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd,
                       hitRayBegin, colorNormals);
 }    
 
+__device__ bool d_raysTerminated;
 
 // TODO Place all material parameters in a struct and create access methods for
 // it, so I don't have to extend the shade kernels each time I add a new
@@ -117,6 +119,7 @@ void PathTraceKernel(float4* rayOrigins,
         const float3 color = oldF * backgroundColor;
         emission_bounces[fragID] = make_float4(color, emission_bounce.w);
         hitIDs[rayID] = 0; // Make a note that this ray should be terminated.
+        d_raysTerminated = true;
         return;
     }
     
@@ -126,6 +129,7 @@ void PathTraceKernel(float4* rayOrigins,
     if (emission_bounce.w >= 5) {
         emission_bounces[fragID] = emission_bounce + make_float4(oldF * make_float3(emission_reflection), 0);
         hitIDs[rayID] = 0; // Make a note that this ray should be terminated.
+        d_raysTerminated = true;
         return;
     }
 
@@ -202,20 +206,23 @@ void PathTraceKernel(float4* rayOrigins,
                        // would save a couple of writes.
 }
 
-void Shading::Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
+void Shading::Shade(RayContainer& rays, 
                     thrust::device_vector<unsigned int>::iterator hitIDs,
                     SpheresGeometry& spheres,
                     Fragments& frags) {
 
-    size_t nRays = raysEnd - raysBegin;
+    size_t nRays = rays.EndLeafRays() - rays.BeginLeafRays();
+
+    bool raysTerminated = false;
+    cudaMemcpyToSymbol(d_raysTerminated, &raysTerminated, sizeof(bool), 0, cudaMemcpyHostToDevice);
 
     struct cudaFuncAttributes funcAttr;
     cudaFuncGetAttributes(&funcAttr, PathTraceKernel);
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     unsigned int blocks = (nRays / blocksize) + 1;
     PathTraceKernel<<<blocks, blocksize>>>
-        (RawPointer(Rays::GetOrigins(raysBegin)),
-         RawPointer(Rays::GetDirections(raysBegin)),
+        (RawPointer(Rays::GetOrigins(rays.BeginLeafRays())),
+         RawPointer(Rays::GetDirections(rays.BeginLeafRays())),
          RawPointer(hitIDs), // Contains information about the new rays after 
          RawPointer(spheres.spheres),
          RawPointer(spheres.materialIDs),
@@ -226,4 +233,12 @@ void Shading::Shade(Rays::Iterator raysBegin, Rays::Iterator raysEnd,
          nRays,
          rand());
     CHECK_FOR_CUDA_ERROR();
+
+    cudaMemcpyFromSymbol(&raysTerminated, d_raysTerminated, sizeof(bool));
+
+    if (raysTerminated)
+        rays.RemoveTerminated(hitIDs);
+    else
+        rays.ReinitLeafRays();
+
 }
