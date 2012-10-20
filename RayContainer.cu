@@ -18,6 +18,7 @@
 #include <thrust/tuple.h>
 
 #include <sstream>
+#include <stdexcept>
 
 void RayContainer::Clear() {
     innerRays.Resize(0);
@@ -186,10 +187,19 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
 }
 
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
-    nextRays.Resize(terminated.size());
+    // Verify that terminated has the correct size. Just in case and errors are
+    // more important than CPU performance.
+    if (terminated.size() != nLeafRays)
+        throw std::runtime_error("Size of list of possible terminated rays do not match number of leaf rays.");
+    
+    RemoveTerminated(terminated.begin());
+}
+
+void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>::iterator beginTerminated) {
+    nextRays.Resize(nLeafRays);
     
     Rays::Iterator end = 
-        thrust::remove_copy_if(BeginLeafRays(), EndLeafRays(), terminated.begin(), 
+        thrust::remove_copy_if(BeginLeafRays(), EndLeafRays(), beginTerminated,
                                nextRays.Begin(), thrust::logical_not<unsigned int>());
     
     size_t innerSize = end - nextRays.Begin();
@@ -197,6 +207,10 @@ void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& termina
     innerRays.Resize(innerSize);
     nextRays.Resize(innerSize);
 
+    nLeafRays = 0;
+}
+
+void RayContainer::ReinitLeafRays() {
     nLeafRays = 0;
 }
 

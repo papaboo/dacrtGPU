@@ -65,7 +65,13 @@ public:
     void SortToLeaves(thrust::device_vector<unsigned int>::iterator keysBegin,
                       thrust::device_vector<unsigned int>::iterator keysEnd);
     
-    void RemoveTerminated(thrust::device_vector<unsigned int>& termianted);
+    void RemoveTerminated(thrust::device_vector<unsigned int>& terminated);
+    void RemoveTerminated(thrust::device_vector<unsigned int>::iterator beginTerminated);
+
+    /**
+     * Moves leaf rays to active rays.
+     */
+    void ReinitLeafRays();
 
     std::string ToString() const;
 };
