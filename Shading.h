@@ -20,14 +20,12 @@ class SpheresGeometry;
 class Shading {
 public:
 
-    static void Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
+    static void Normals(RayContainer& rays, 
                         thrust::device_vector<unsigned int>::iterator hitIDs,
                         SpheresGeometry& spheres,
                         Fragments& frags);
 
-    // TODO Function should return a new set of rays (or perhaps simply take a
-    // hit generator as argument to launch the next set of shaded rays)
-    // Template with rusian roulette bool and set bool flag if a ray is
+    // TODO Template with rusian roulette bool and set bool flag if a ray is
     // terminated, so we only scan rays when one should actually be removed.
     /**
      * Shades the fragments based on the geometry and rays intersections.

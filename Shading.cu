@@ -15,54 +15,51 @@
 #include <SphereGeometry.h>
 #include <Utils/Random.h>
 
-#include <thrust/transform.h>
-
 #include <iostream>
 
 #define PI ((float)3.14159265358979)
 
-struct ColorNormals {
-    Sphere* spheres;
-    
-    float4* emissionDepth;
-    
-    ColorNormals(SpheresGeometry& sg,
-                 Fragments& frags)
-        : spheres(thrust::raw_pointer_cast(sg.spheres.data())),
-          emissionDepth(thrust::raw_pointer_cast(frags.emissionDepth.data())) {}
+__global__
+void ColorNormalsKernel(float4* rayOrigins,
+                        float4* rayDirections,
+                        unsigned int* hitIDs, // Contains information about the new rays after 
+                        const Sphere* const spheres,
+                        float4* emission_bounces, // result
+                        const unsigned int nRays) {
 
-    __host__ __device__
-    thrust::tuple<unsigned int, thrust::tuple<float4, float4> > operator()(const thrust::tuple<unsigned int, thrust::tuple<float4, float4> > hitID_Ray) const {
-        const unsigned int hitID = thrust::get<0>(hitID_Ray);
-        const float4 originId = thrust::get<0>(thrust::get<1>(hitID_Ray));
-        const float3 origin = make_float3(originId);
-        const unsigned int id = originId.w;
+    const unsigned int rayID = threadIdx.x + blockDim.x * blockIdx.x;
+    if (rayID >= nRays) return;
 
-        if (hitID == SpheresGeometry::MISSED) {
-            emissionDepth[id] =  make_float4(0.0f, 0.0f, 0.0f, 0.0f);
-            return 0; 
-        }
+    const unsigned int hitID = hitIDs[rayID];
+    const float4 originId = rayOrigins[rayID];
+    const float3 rayOrigin = make_float3(originId);
+    const unsigned int fragID = originId.w;
 
-        const Sphere sphere = spheres[hitID];
-
-        const float4 dir_t = thrust::get<1>(thrust::get<1>(hitID_Ray));
-        const float3 dir = make_float3(dir_t);
-        const float t = dir_t.w;
-        
-        const float3 hitPos = origin + t * dir;
-        float3 norm = normalize(hitPos - sphere.center);
-
-        // Map to visible
-        emissionDepth[id] = make_float4(norm * 0.5f + 0.5f, 1.0f);
-
-        const float3 reflectionDir = dir - norm * 2 * dot(norm, dir);
-        thrust::tuple<float4, float4> newRay(make_float4(hitPos + norm * 0.02f, id), 
-                                             make_float4(reflectionDir, 0.0f));
-
-        return thrust::tuple<unsigned int, thrust::tuple<float4, float4> >(hitID == 7 ? 1 : 0,
-                                                                           newRay);
+    if (hitID == SpheresGeometry::MISSED) {
+        emission_bounces[fragID] =  make_float4(0.0f, 0.0f, 0.0f, 0.0f);
+        hitIDs[rayID] = 0; // Make a note that this ray should be terminated.
+        return;
     }
-};
+
+    const Sphere sphere = spheres[hitID];
+
+    const float4 dir_t = rayDirections[rayID];
+    const float3 dir = make_float3(dir_t);
+    const float t = dir_t.w;
+    
+    const float3 hitPos = t * dir + rayOrigin;
+    const float3 norm = normalize(hitPos - sphere.center);
+    
+    // Map to visible
+    emission_bounces[fragID] = make_float4(norm * 0.5f + 0.5f, 1.0f);
+        
+    rayOrigins[rayID] = make_float4(hitPos + norm * 0.02f, fragID);
+
+    const float3 reflectionDir = dir - norm * 2 * dot(norm, dir);
+    rayDirections[rayID] = make_float4(reflectionDir, 0.0f);
+
+    hitIDs[rayID] = hitID == 7 ? 1 : 0; // Reflect of sphere 7, just to test it
+}
 
 /**
  * Shades the fragments with the color of the normals.
@@ -70,18 +67,27 @@ struct ColorNormals {
  * After execution the hitIDs contains 0 for rays that bounced and 0 for
  * terminated rays.
  */
-void Shading::Normals(Rays::Iterator raysBegin, Rays::Iterator raysEnd, 
+void Shading::Normals(RayContainer& rays, 
                       thrust::device_vector<unsigned int>::iterator hitIDs,
                       SpheresGeometry& spheres, 
                       Fragments& frags) {
-    
-    size_t rayCount = raysEnd - raysBegin;
-    thrust::zip_iterator<thrust::tuple<UintIterator, Rays::Iterator> > hitRayBegin =
-        thrust::make_zip_iterator(thrust::make_tuple(hitIDs, raysBegin));
 
-    ColorNormals colorNormals(spheres, frags);
-    thrust::transform(hitRayBegin, hitRayBegin + rayCount,
-                      hitRayBegin, colorNormals);
+    size_t nRays = rays.EndLeafRays() - rays.BeginLeafRays();    
+
+    struct cudaFuncAttributes funcAttr;
+    cudaFuncGetAttributes(&funcAttr, ColorNormalsKernel);
+    unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
+    unsigned int blocks = (nRays / blocksize) + 1;
+    ColorNormalsKernel<<<blocks, blocksize>>>
+        (RawPointer(Rays::GetOrigins(rays.BeginLeafRays())),
+         RawPointer(Rays::GetDirections(rays.BeginLeafRays())),
+         RawPointer(hitIDs), // Contains information about the new rays after 
+         RawPointer(spheres.spheres),
+         RawPointer(frags.emissionDepth), // result
+         nRays);
+    CHECK_FOR_CUDA_ERROR();
+
+    rays.RemoveTerminated(hitIDs);
 }    
 
 __device__ bool d_raysTerminated;
