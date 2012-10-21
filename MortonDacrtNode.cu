@@ -13,7 +13,7 @@
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <Meta/CUDA.h>
 #include <Primitives/AABB.h>
-#include <Primitives/Cone.h>
+#include <Primitives/SphereCone.h>
 #include <Primitives/HyperCube.h>
 #include <Primitives/MortonCode.h>
 #include <RayContainer.h>
@@ -36,7 +36,8 @@ MortonDacrtNodes::MortonDacrtNodes(const size_t capacity)
     : rayPartitions(capacity), nextRayPartitions(capacity), 
       spherePartitions(capacity), nextSpherePartitions(capacity),
       leafNodes(0),
-      rays(NULL), spheresGeom(NULL),
+      rays(NULL), rayMortonCodes(capacity),
+      spheresGeom(NULL),
       sphereIndices(capacity), sphereIndexPartition(capacity),
       nextSphereIndices(capacity), nextSphereIndexPartition(capacity),
       leafSphereIndices(0) {}
@@ -266,11 +267,11 @@ struct CreateHyperCubesFromBounds {
 
 struct CreateConesFromHypercubes {
     __host__ __device__
-    inline Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
+    inline SphereCone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
         const HyperCube cube(thrust::get<0>(c), thrust::get<1>(c), thrust::get<2>(c),
                              thrust::get<3>(c), thrust::get<4>(c), thrust::get<5>(c));
         
-        return Cone::FromCube(cube);
+        return SphereCone::FromCube(cube);
     }
 };
 
@@ -281,19 +282,19 @@ struct CreateConesFromBounds {
         : rayMortonCoder(rMC) {}
 
     __host__ __device__
-    inline Cone operator()(const MortonBound bound) const {
+    inline SphereCone operator()(const MortonBound bound) const {
         HyperCube cube = rayMortonCoder.HyperCubeFromBound(bound);
         
-        return Cone::FromCube(cube);
+        return SphereCone::FromCube(cube);
     }
 };
 
-__constant__ Cone d_cone;
+__constant__ SphereCone d_cone;
 struct CompareConeSphere {
     
-    CompareConeSphere(thrust::device_vector<Cone>& cones, unsigned int index) {
-        Cone* cone = thrust::raw_pointer_cast(cones.data()) + index;
-        cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(Cone), 0, cudaMemcpyDeviceToDevice);
+    CompareConeSphere(thrust::device_vector<SphereCone>& cones, unsigned int index) {
+        SphereCone* cone = thrust::raw_pointer_cast(cones.data()) + index;
+        cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(SphereCone), 0, cudaMemcpyDeviceToDevice);
     }
     
     __device__
@@ -322,7 +323,7 @@ __global__
 void SpherePartitioningByConesKernel(const unsigned int* const sphereIndices,
                                      const unsigned int* const owners,
                                      const uint2* const partitionings,
-                                     const Cone* const cones,
+                                     const SphereCone* const cones,
                                      const Sphere* const spheres,
                                      bool* movedLeftRight, // Result
                                      const unsigned int nActiveIndices,
@@ -341,11 +342,11 @@ void SpherePartitioningByConesKernel(const unsigned int* const sphereIndices,
 
     const unsigned int offset = id - partitioning.x;
 
-    const Cone leftCone = cones[(owner-nLeafNodes)*2];
+    const SphereCone leftCone = cones[(owner-nLeafNodes)*2];
     const unsigned int leftResIndex = 2 * (partitioning.x - nLeafIndices) + offset; // Simplify? Is nLeafIndices even necessary?
     movedLeftRight[leftResIndex] = leftCone.DoesIntersect(sphere);
     
-    const Cone rightCone = cones[(owner-nLeafNodes)*2+1];
+    const SphereCone rightCone = cones[(owner-nLeafNodes)*2+1];
     const unsigned int rightResIndex = leftResIndex + (partitioning.y - partitioning.x); // Simplify?
     movedLeftRight[rightResIndex] = rightCone.DoesIntersect(sphere);
 }
@@ -393,9 +394,9 @@ void PartitionIndices(const unsigned int* const sphereIndices,
 }
 
 struct SpherePartitioningByCones {
-    Cone* cones;
+    SphereCone* cones;
     Sphere* spheres;
-    SpherePartitioningByCones(thrust::device_vector<Cone>& cs, 
+    SpherePartitioningByCones(thrust::device_vector<SphereCone>& cs, 
                               thrust::device_vector<Sphere>& ss)
         : cones(RawPointer(cs)),
           spheres(RawPointer(ss)) {}
@@ -404,10 +405,10 @@ struct SpherePartitioningByCones {
     PartitionSide operator()(const unsigned int sphereId, const unsigned int owner) const {
         const Sphere sphere = spheres[sphereId];
         
-        const Cone leftCone = cones[owner * 2];
+        const SphereCone leftCone = cones[owner * 2];
         PartitionSide left = leftCone.DoesIntersect(sphere) ? LEFT : NONE;
         
-        const Cone rightCone = cones[owner * 2 + 1];
+        const SphereCone rightCone = cones[owner * 2 + 1];
         return left | rightCone.DoesIntersect(sphere) ? RIGHT : NONE;
     }
 };
@@ -462,7 +463,6 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     
     // This should actually be of type MortonCode, but I leave it as unsigned
     // int so thrust can use radix sort.
-    static thrust::device_vector<unsigned int> rayMortonCodes(rayContainer.InnerSize());
     rayMortonCodes.resize(rayContainer.InnerSize());
 
     RayMortonCoder rayMortonCoder(spheres.GetBounds());
@@ -553,7 +553,7 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
         //                   hyperCubes.Begin(), CreateHyperCubesFromBounds(rayMortonCoder));
         // cout << hyperCubes << endl;
         
-        static thrust::device_vector<Cone> cones(bounds.size()); cones.resize(bounds.size());
+        static thrust::device_vector<SphereCone> cones(bounds.size()); cones.resize(bounds.size());
         thrust::transform(bounds.begin(), bounds.end(), cones.begin(), CreateConesFromBounds(rayMortonCoder));
         // cout << "cones:\n" << cones << endl;
 
@@ -1041,7 +1041,7 @@ void MortonDacrtNodes::InitSphereIndices(HyperCubes& cubes, SpheresGeometry& sph
     sphereIndices.resize(spheres.Size() * cubes.Size());
     sphereIndexPartition.resize(sphereIndices.size());
     
-    thrust::device_vector<Cone> cones(cubes.Size()); // TODO can't this be passed in from outside to save allocation and dealloc?
+    thrust::device_vector<SphereCone> cones(cubes.Size()); // TODO can't this be passed in from outside to save allocation and dealloc?
     thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), CreateConesFromHypercubes());
 
     unsigned int spherePartitionPivots[cubes.Size() + 1];

@@ -28,6 +28,7 @@ class MortonDacrtNodes {
     unsigned int leafNodes;
 
     RayContainer* rays;
+    thrust::device_vector<unsigned int> rayMortonCodes;
     SpheresGeometry* spheresGeom;
     thrust::device_vector<unsigned int> sphereIndices;
     thrust::device_vector<unsigned int> sphereIndexPartition;

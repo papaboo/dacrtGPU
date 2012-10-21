@@ -9,10 +9,9 @@
 #ifndef _GPU_DACRT_SPHERE_CONE_H_
 #define _GPU_DACRT_SPHERE_CONE_H_
 
-#include <HyperCube.h>
+#include <Primitives/HyperCube.h>
 #include <Primitives/Sphere.h>
-
-#include <cutil_math.h>
+#include <Utils/Math.h>
 
 #include <string>
 #include <sstream>
@@ -70,7 +69,7 @@ struct SphereCone {
     inline bool DoesIntersect(const Sphere& sphere) const {
 
         const float sinToAngle = std::sin(spreadAngle);
-        const float cosToAngleSqr = std::cos(spreadAngle) * cos(spreadAngle);
+        const float cosToAngleSqr = std::cos(spreadAngle) * std::cos(spreadAngle);
         
         return DoesIntersect(sphere, 1.0f / sinToAngle, cosToAngleSqr);
     }

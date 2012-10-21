@@ -73,7 +73,8 @@ struct Cone {
     inline bool DoesIntersect(const Sphere& sphere) const {
 
         const float sinToAngle = std::sin(spreadAngle);
-        const float cosToAngleSqr = std::cos(spreadAngle) * cos(spreadAngle);
+        const float cosToAngleSqr = std::cos(spreadAngle) * std::cos(spreadAngle);
+        //const float cosToAngleSqr = 1.0f - sinToAngle * sinToAngle;
         
         return DoesIntersect(sphere, 1.0f / sinToAngle, cosToAngleSqr);
     }
@@ -88,7 +89,7 @@ struct Cone {
         // the constructor when one is created? (I dont' need them for this project
         // anyway)
 
-        // TODO make sure sphere is further away than apex distance
+        // Make sure sphere is further away than apex distance
         if (length(sphere.center - apex) < (apexDistance - sphere.radius)) return false;
     
         const float3 U = apex - direction * (sphere.radius * invSinToAngle);
@@ -101,6 +102,7 @@ struct Cone {
             dSqr = dot(D,D);
             e = -dot(direction, D);
             const float sinSqr = 1.0f - cosToAngleSqr;
+
             if (e > 0 && e*e >= dSqr * sinSqr)
                 return dSqr <= sphere.radius * sphere.radius;
             else
