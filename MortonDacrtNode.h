@@ -9,6 +9,8 @@
 #ifndef _GPU_MORTON_DACRT_NODE_H_
 #define _GPU_MORTON_DACRT_NODE_H_
 
+#include <IRayTracer.h>
+
 #include <thrust/device_vector.h>
 
 #include <string>
@@ -19,7 +21,7 @@ class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
 
-class MortonDacrtNodes {
+class MortonDacrtNodes : public virtual IRayTracer {
     thrust::device_vector<uint2> rayPartitions;
     thrust::device_vector<uint2> nextRayPartitions;
 

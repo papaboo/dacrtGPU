@@ -9,6 +9,8 @@
 #ifndef _GPU_DACRT_NODE_H_
 #define _GPU_DACRT_NODE_H_
 
+#include <IRayTracer.h>
+
 #include <thrust/device_vector.h>
 
 #include <string>
@@ -41,7 +43,7 @@ inline std::ostream& operator<<(std::ostream& s, const DacrtNode& n){
 
 
 
-class DacrtNodes {
+class DacrtNodes : public IRayTracer {
 private:
     thrust::device_vector<unsigned int> scan1;
     thrust::device_vector<unsigned int> scan2;
@@ -73,14 +75,13 @@ public:
     inline SphereContainer* GetSphereIndices() { return sphereIndices; }
 
     /**
-     * Takes a list of rays and geometry and intersects them by the partitioning
-     * specified in the DacrtNodes.
+     * Performs and intersection between the ray and spheres specified in
+     * Create.
      *
      * The results of these intersections are stored in
      * hits. ExhaustiveIntersect will increase the size of hits if needed.
      */
-    void ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
-                             thrust::device_vector<unsigned int>& hits);
+    void FindIntersections(thrust::device_vector<unsigned int>& hits);
 
     inline thrust::device_vector<uint2>::iterator RayPartitionsBegin() { return doneRayPartitions.begin(); }
     inline thrust::device_vector<uint2>::iterator RayPartitionsEnd() { return doneRayPartitions.end(); }

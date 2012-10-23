@@ -9,7 +9,7 @@
 #include <SphereContainer.h>
 
 #include <HyperCubes.h>
-#include <Primitives/Cone.h>
+#include <Primitives/SphereCone.h>
 #include <Primitives/HyperCube.h>
 #include <SphereGeometry.h>
 
@@ -31,25 +31,25 @@ SphereContainer::SphereContainer(SpheresGeometry& spheres, thrust::device_vector
 
 struct CreateCones {
     __host__ __device__
-    Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
+    SphereCone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
         const HyperCube cube(thrust::get<0>(c), thrust::get<1>(c), thrust::get<2>(c),
                              thrust::get<3>(c), thrust::get<4>(c), thrust::get<5>(c));
         
-        return Cone::FromCube(cube);
+        return SphereCone::FromCube(cube);
     }
 };
 static CreateCones createCones;
 
 
-__constant__ Cone d_cone;
+__constant__ SphereCone d_cone;
 // __constant__ float d_invSinToAngle;
 // __constant__ float d_cosToAngleSqr;
 
 struct CompareConeSphere {
 
-    CompareConeSphere(thrust::device_vector<Cone>& cones, unsigned int index) {
-        Cone* cone = thrust::raw_pointer_cast(cones.data()) + index;
-        cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(Cone), 0, cudaMemcpyDeviceToDevice);
+    CompareConeSphere(thrust::device_vector<SphereCone>& cones, unsigned int index) {
+        SphereCone* cone = thrust::raw_pointer_cast(cones.data()) + index;
+        cudaMemcpyToSymbol(d_cone, (void*)cone, sizeof(SphereCone), 0, cudaMemcpyDeviceToDevice);
         // const float invSinToAngle = 1.0f / std::sin(spreadAngle);
         // const float cosToAngleSqr = std::cos(spreadAngle) * cos(spreadAngle);
         // cudaMemcpyToSymbol(d_invSinToAngle, (void*)&invSinToAngle, sizeof(float), 0, cudaMemcpyHostToDevice);
@@ -74,7 +74,7 @@ SphereContainer::SphereContainer(HyperCubes& cubes, SpheresGeometry& spheres,
     nextIndices.resize(0);
     doneIndices.resize(0);
 
-    thrust::device_vector<Cone> cones(cubes.Size());
+    thrust::device_vector<SphereCone> cones(cubes.Size());
     thrust::transform(cubes.Begin(), cubes.End(), cones.begin(), createCones);
     //std::cout << cones << std::endl;
 

@@ -668,6 +668,8 @@ void MortonDacrtNodes::Create(RayContainer& rayContainer, SpheresGeometry& spher
     // before intersection.
 
     cout << "\n *** GORELESS VICTORY ***\n" << endl;
+    //cout << "\n *** GORELESS VICTORY ***\n" << ToString(false) << "\n" << endl;
+
 }
 
 

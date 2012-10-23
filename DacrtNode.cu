@@ -10,7 +10,7 @@
 
 #include <ForEachWithOwners.h>
 #include <HyperCubes.h>
-#include <Primitives/Cone.h>
+#include <Primitives/SphereCone.h>
 #include <Primitives/HyperCube.h>
 #include <Rays.h>
 #include <RayContainer.h>
@@ -251,11 +251,11 @@ struct BoolToInt { __host__ __device__ unsigned int operator()(bool b) { return 
 
 struct CreateCones {
     __host__ __device__
-    Cone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
+    SphereCone operator()(const thrust::tuple<SignedAxis, float2, float2, float2, float2, float2> c) const {
         const HyperCube cube(thrust::get<0>(c), thrust::get<1>(c), thrust::get<2>(c),
                              thrust::get<3>(c), thrust::get<4>(c), thrust::get<5>(c));
         
-        return Cone::FromCube(cube);
+        return SphereCone::FromCube(cube);
     }
 };
 
@@ -303,9 +303,9 @@ struct CubesFromSplitPlanes {
 };
 
 struct SpherePartitioningByCones {
-    Cone* cones;
+    SphereCone* cones;
     Sphere* spheres;
-    SpherePartitioningByCones(thrust::device_vector<Cone>& cs, 
+    SpherePartitioningByCones(thrust::device_vector<SphereCone>& cs, 
                               thrust::device_vector<Sphere>& ss)
         : cones(thrust::raw_pointer_cast(cs.data())),
           spheres(thrust::raw_pointer_cast(ss.data())) {}
@@ -314,10 +314,10 @@ struct SpherePartitioningByCones {
     PartitionSide operator()(const unsigned int sphereId, const unsigned int owner) const {
         const Sphere sphere = spheres[sphereId];
         
-        const Cone leftCone = cones[owner];
+        const SphereCone leftCone = cones[owner];
         PartitionSide side = leftCone.DoesIntersect(sphere) ? LEFT : NONE;
         
-        const Cone rightCone = cones[owner + d_oldCubeCount];
+        const SphereCone rightCone = cones[owner + d_oldCubeCount];
         return (PartitionSide)(side | (rightCone.DoesIntersect(sphere) ? RIGHT : NONE));
     }
 };
@@ -495,7 +495,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     // Calculate the cones used for splitting 
     // TODO using knowledge about the cube split, the resulting two cones can be
     // computed faster if computed together in one thread.
-    static thrust::device_vector<Cone> cones(cubes.Size());
+    static thrust::device_vector<SphereCone> cones(cubes.Size());
     cones.resize(cubes.Size() * 2);
     thrust::transform(splitCubes.Begin(), splitCubes.End(), cones.begin(), CreateCones());
 
@@ -535,7 +535,7 @@ void DacrtNodes::Partition(RayContainer& rays, SphereContainer& spheres,
     nextSpherePartitions.resize(nextUnfinishedNodes);
     
     // Wrap partitions in uint4 to be able to store both left and right
-    // simultaneously and coallesced. (Hackish)
+    // simultaneously and coallesced. (Hackish, and won't work due to alignment)
     // thrust::device_ptr<uint4> nextRays((uint4*)(void*)thrust::raw_pointer_cast(nextRayPartitions.data()));
     // thrust::device_ptr<uint4> nextSpheres((uint4*)(void*)thrust::raw_pointer_cast(nextSpherePartitions.data()));
     
@@ -762,24 +762,23 @@ struct ExhaustiveIntersection {
     }
 };
 
-void DacrtNodes::ExhaustiveIntersect(RayContainer& rays, SphereContainer& spheres, 
-                                     thrust::device_vector<unsigned int>& hits) {
+void DacrtNodes::FindIntersections(thrust::device_vector<unsigned int>& hits) {
     
-    // std::cout << "ExhaustiveIntersect" << std::endl;
-    hits.resize(rays.LeafRays());
+    // std::cout << "FindIntersections" << std::endl;
+    hits.resize(rays->LeafRays());
 
-    // std::cout << "doneRayPartitions:\n" << doneRayPartitions <<std::endl;
+    // std::cout << "doneRayPartitions:\n" << doneRayPartitions << std::endl;
 
-    ExhaustiveIntersection exhaustive(rays.BeginLeafRays(), 
+    ExhaustiveIntersection exhaustive(rays->BeginLeafRays(), 
                                       doneSpherePartitions, 
-                                      spheres.doneIndices, 
-                                      spheres.spheres.spheres,
+                                      sphereIndices->doneIndices, 
+                                      sphereIndices->spheres.spheres,
                                       hits);
     ForEachWithOwners(hits.size(), 
                       doneRayPartitions.begin(), doneRayPartitions.end(), 
                       exhaustive);
 
-    //std::cout << "hits:\n" << hits << std::endl;
+    // std::cout << "hits:\n" << hits << std::endl;
 }
 
 // *** CALC OWNERS ***

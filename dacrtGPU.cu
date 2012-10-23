@@ -32,14 +32,14 @@
 using std::cout;
 using std::endl;
 
-//const int WIDTH = 2, HEIGHT = 2;
+//const int WIDTH = 4, HEIGHT = 4;
 //const int WIDTH = 8, HEIGHT = 8;
 //const int WIDTH = 16, HEIGHT = 16;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
 //const int WIDTH = 128, HEIGHT = 128;
-//const int WIDTH = 256, HEIGHT = 256;
-const int WIDTH = 512, HEIGHT = 512;
+const int WIDTH = 256, HEIGHT = 256;
+// const int WIDTH = 512, HEIGHT = 512;
 //const int WIDTH = 1440, HEIGHT = 900;
 int sqrtSamples;
 int samples;
@@ -47,41 +47,23 @@ int samples;
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
-    MortonDacrtNodes mNodes = MortonDacrtNodes(1);
+    MortonDacrtNodes tracer = MortonDacrtNodes(1);
+    //DacrtNodes tracer = DacrtNodes(1);
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
         cout << rays.InnerSize() << " rays for bounce " << (bounce+1) << endl;
 
-        mNodes.Create(rays, spheres);
+        tracer.Create(rays, spheres);
 
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
-        mNodes.FindIntersections(hitIDs);
+        tracer.FindIntersections(hitIDs);
 
-        Shading::Normals(rays, hitIDs.begin(), 
+        Shading::Shade(rays, hitIDs.begin(), 
                        spheres, rayFrags);
  
         ++bounce;
     }
-
-    /*
-    DacrtNodes nodes = DacrtNodes(1);
-    unsigned int bounce = 0;
-    while (rays.InnerSize() > 0) {
-        
-        cout << rays.InnerSize() << " rays for bounce " << (bounce+1) << endl;
-
-        nodes.Create(rays, spheres);
-
-        static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
-        nodes.ExhaustiveIntersect(rays, *(nodes.GetSphereIndices()), hitIDs);
-
-        Shading::Shade(rays.BeginLeafRays(), rays.EndLeafRays(), hitIDs.begin(), 
-                       nodes.GetSphereIndices()->spheres, rayFrags);
-
-        ++bounce;
-    }
-    */
 }
 
 __constant__ int d_samples;
