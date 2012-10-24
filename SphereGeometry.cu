@@ -8,8 +8,6 @@
 
 #include <SphereGeometry.h>
 
-#include <Primitives/Cone.h>
-#include <Primitives/HyperCube.h>
 #include <Utils/ToString.h>
 
 #include <iostream>
@@ -31,8 +29,8 @@ SpheresGeometry SpheresGeometry::CornellBox(const int n) {
     float3 zero3 = make_float3(0.0f, 0.0f, 0.0f);
     float3 gold = make_float3(0.8314f, 0.6863f, 0.2157f);
     mats.Set(0, Material(zero3, make_float3(0.75f, 0.75f, 0.75f), 0.0f, 0.0f)); // light grey
-    mats.Set(1, Material(make_float3(1.5f, 0.5f, 0.5f), make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red wall
-    mats.Set(2, Material(make_float3(0.5f, 0.5f, 1.5f), make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue wall
+    mats.Set(1, Material(zero3, make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red wall
+    mats.Set(2, Material(zero3, make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue wall
     mats.Set(3, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 0.0f, 1.0f)); // glass ball
     mats.Set(4, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 1.0f, 0.0f)); // mirror ball
     mats.Set(5, Material(make_float3(12.0f,12.0f,12.0f), zero3, 0.0f, 0.0f)); // light
