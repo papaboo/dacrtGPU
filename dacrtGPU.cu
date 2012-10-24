@@ -11,6 +11,7 @@
 // Usage: ./build/DACRTPlane <samples> <iterations>
 
 #include <DacrtNode.h>
+#include <ExhaustiveIntersection.h>
 #include <Fragment.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <MortonDacrtNode.h>
@@ -46,17 +47,21 @@ int samples;
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
-    MortonDacrtNodes tracer = MortonDacrtNodes(1);
+    // MortonDacrtNodes tracer = MortonDacrtNodes(1);
     //DacrtNodes tracer = DacrtNodes(1);
+    ExhaustiveIntersection tracer;
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
         cout << rays.InnerSize() << " rays for bounce " << (bounce+1) << endl;
 
         tracer.Create(rays, spheres);
-
+        
         static thrust::device_vector<unsigned int> hitIDs(rays.LeafRays());
+        hitIDs.resize(rays.LeafRays());
         tracer.FindIntersections(hitIDs);
+
+        // cout << hitIDs << endl;
 
         Shading::Shade(rays, hitIDs.begin(), 
                        spheres, rayFrags);

@@ -24,6 +24,8 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   DacrtNode.h
   DacrtNode.cu
   dacrtGPU.cu
+  ExhaustiveIntersection.h
+  ExhaustiveIntersection.cu
   Fragment.h
   HyperCubes.h
   HyperCubes.cu
