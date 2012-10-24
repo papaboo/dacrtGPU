@@ -56,7 +56,7 @@ void ColorNormalsKernel(float4* rayOrigins,
     rayOrigins[rayID] = make_float4(hitPos + norm * 0.02f, fragID);
 
     const float3 reflectionDir = dir - norm * 2 * dot(norm, dir);
-    rayDirections[rayID] = make_float4(reflectionDir, 0.0f);
+    rayDirections[rayID] = make_float4(reflectionDir, 1e30f);
 
     hitIDs[rayID] = hitID == 7 ? 1 : 0; // Reflect of sphere 7, just to test it
 }
@@ -204,7 +204,7 @@ void PathTraceKernel(float4* rayOrigins,
     
     bool refract = dot(rayNorm, dir) < 0.0f;
     rayOrigins[rayID] = make_float4(hitPos + rayNorm * (refract ? -0.02f : 0.02f), fragID);
-    rayDirections[rayID] = make_float4(dir, 0.0f);
+    rayDirections[rayID] = make_float4(dir, 1e30f);
     
     hitIDs[rayID] = 1; // Note that this ray should not be terminated. TODO
                        // Perhaps I should just use sphere missed to denote done
