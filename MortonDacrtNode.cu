@@ -42,13 +42,16 @@ MortonDacrtNodes::MortonDacrtNodes(const size_t capacity)
       nextSphereIndices(capacity), nextSphereIndexPartition(capacity),
       leafSphereIndices(0) {}
 
+
+__constant__ AABB d_mortonCoder_bound;
+__constant__ float3 d_boundInvSize;
+
 struct RayMortonCoder {
     
-    // TODO Copy these fields to CUDA as constants (After I'm done doing host testing)
-    AABB bound;
-    float3 boundInvSize;
-    RayMortonCoder(const AABB& bound)
-        : bound(bound), boundInvSize(bound.InvertedSize()) {}
+    RayMortonCoder(const AABB& bound) {
+        ValueToSymbol(d_mortonCoder_bound, bound);
+        ValueToSymbol(d_boundInvSize, bound.InvertedSize());
+    }
 
     __host__ __device__
     inline MortonCode operator()(const thrust::tuple<float4, float4> ray) const {
@@ -62,7 +65,7 @@ struct RayMortonCoder {
     inline MortonCode operator()(float3 origin, const float3 direction) const {
         
         float tHit;
-        if (!bound.ClosestIntersection(origin, direction, tHit)) 
+        if (!d_mortonCoder_bound.ClosestIntersection(origin, direction, tHit)) 
             // If the ray misses the scene bounds, then use an invalid axis to
             // sort the slacker ray into its own partition at the end of the
             // list.
@@ -88,17 +91,17 @@ struct RayMortonCoder {
         return mortonCode;
     }
     
-    __host__ __device__ inline unsigned int CreateXIndex(const float x) const { return (x - bound.min.x) * boundInvSize.x * 63.999f; }
-    __host__ __device__ inline unsigned int CreateYIndex(const float y) const { return (y - bound.min.y) * boundInvSize.y * 31.999f; }
-    __host__ __device__ inline unsigned int CreateZIndex(const float z) const { return (z - bound.min.z) * boundInvSize.z * 63.999f; }
+    __host__ __device__ inline unsigned int CreateXIndex(const float x) const { return (x - ValueFromSymbol(d_mortonCoder_bound).min.x) * ValueFromSymbol(d_boundInvSize).x * 63.999f; }
+    __host__ __device__ inline unsigned int CreateYIndex(const float y) const { return (y - ValueFromSymbol(d_mortonCoder_bound).min.y) * ValueFromSymbol(d_boundInvSize).y * 31.999f; }
+    __host__ __device__ inline unsigned int CreateZIndex(const float z) const { return (z - ValueFromSymbol(d_mortonCoder_bound).min.z) * ValueFromSymbol(d_boundInvSize).z * 63.999f; }
     __host__ __device__ inline unsigned int CreateUIndex(const float u) const { return (u + 1.0f) * 31.999f; }
     __host__ __device__ inline unsigned int CreateVIndex(const float v) const { return (v + 1.0f) * 31.999f; }
     
-    __host__ __device__ inline float XMin(const unsigned int xIndex) const { return (float)xIndex / (63.999f * boundInvSize.x) + bound.min.x; }
+    __host__ __device__ inline float XMin(const unsigned int xIndex) const { return (float)xIndex / (63.999f * ValueFromSymbol(d_boundInvSize).x) + ValueFromSymbol(d_mortonCoder_bound).min.x; }
     __host__ __device__ inline float XMax(const unsigned int xIndex) const { return XMin(xIndex+1.0f); }
-    __host__ __device__ inline float YMin(const unsigned int yIndex) const { return (float)yIndex / (31.999f * boundInvSize.y) + bound.min.y; }
+    __host__ __device__ inline float YMin(const unsigned int yIndex) const { return (float)yIndex / (31.999f * ValueFromSymbol(d_boundInvSize).y) + ValueFromSymbol(d_mortonCoder_bound).min.y; }
     __host__ __device__ inline float YMax(const unsigned int yIndex) const { return YMin(yIndex+1.0f); }
-    __host__ __device__ inline float ZMin(const unsigned int zIndex) const { return (float)zIndex / (63.999f * boundInvSize.z) + bound.min.z; }
+    __host__ __device__ inline float ZMin(const unsigned int zIndex) const { return (float)zIndex / (63.999f * ValueFromSymbol(d_boundInvSize).z) + ValueFromSymbol(d_mortonCoder_bound).min.z; }
     __host__ __device__ inline float ZMax(const unsigned int zIndex) const { return ZMin(zIndex+1.0f); }
 
     __host__ __device__ inline float UMin(const unsigned int uIndex) const { return (float)uIndex / 31.999f - 1.0f; }
@@ -718,7 +721,6 @@ void CreateNewLeafNodes(const uint2* const rayPartitions,
                         const unsigned int nNewLeafSphereIndices) {
 
     const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
-    
     if (id >= nActiveNodes) return;
     
     const bool isLeaf = isLeafNode[id];

@@ -28,6 +28,29 @@ typedef thrust::device_vector<Axis>::iterator AxisIterator;
 typedef thrust::device_vector<PartitionSide>::iterator PartitionSideIterator;
 
 template <class T>
+__host__ __device__
+inline T ValueFromSymbol(const T &symbol){
+#ifdef __CUDA_ARCH__
+    return symbol;
+#else
+    T ret;
+    cudaMemcpyFromSymbol(&ret, symbol, sizeof(T));
+    return ret;
+#endif
+}
+
+template <class T>
+__host__ __device__
+inline void ValueToSymbol(T &symbol, const T& val){
+#ifdef __CUDA_ARCH__
+    symbol = val;
+#else
+    cudaMemcpyToSymbol(symbol, &val, sizeof(T));
+#endif
+}
+
+
+template <class T>
 inline T* RawPointer(thrust::device_vector<T>& v) {
     return thrust::raw_pointer_cast(v.data());
 }
