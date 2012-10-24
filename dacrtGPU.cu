@@ -13,20 +13,16 @@
 #include <DacrtNode.h>
 #include <ExhaustiveIntersection.h>
 #include <Fragment.h>
-#include <Kernels/ReduceMinMaxMortonCode.h>
 #include <MortonDacrtNode.h>
 #include <Meta/CUDA.h>
 #include <RayContainer.h>
 #include <Shading.h>
-#include <SphereContainer.h>
 #include <SphereGeometry.h>
-#include <Utils/Morton.h>
 #include <Utils/ToString.h>
 
 #include <iostream>
 
 #include <thrust/device_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/version.h>
 
 using std::cout;
@@ -38,8 +34,8 @@ using std::endl;
 //const int WIDTH = 32, HEIGHT = 32;
 //const int WIDTH = 64, HEIGHT = 64;
 //const int WIDTH = 128, HEIGHT = 128;
-const int WIDTH = 256, HEIGHT = 256;
-// const int WIDTH = 512, HEIGHT = 512;
+//const int WIDTH = 256, HEIGHT = 256;
+const int WIDTH = 512, HEIGHT = 512;
 //const int WIDTH = 1440, HEIGHT = 900;
 int sqrtSamples;
 int samples;
@@ -47,9 +43,9 @@ int samples;
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
-    // MortonDacrtNodes tracer = MortonDacrtNodes(1);
+    MortonDacrtNodes tracer = MortonDacrtNodes(1);
     //DacrtNodes tracer = DacrtNodes(1);
-    ExhaustiveIntersection tracer;
+    //ExhaustiveIntersection tracer;
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         
