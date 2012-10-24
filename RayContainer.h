@@ -65,6 +65,11 @@ public:
     void SortToLeaves(thrust::device_vector<unsigned int>::iterator keysBegin,
                       thrust::device_vector<unsigned int>::iterator keysEnd);
     
+    /**
+     * Converts the remaining active rays to leaf rays.
+     */
+    void MakeLeaves();
+    
     void RemoveTerminated(thrust::device_vector<unsigned int>& terminated);
     void RemoveTerminated(thrust::device_vector<unsigned int>::iterator beginTerminated);
 

@@ -186,6 +186,10 @@ void RayContainer::SortToLeaves(thrust::device_vector<unsigned int>::iterator ke
     nLeafRays = keysEnd - keysBegin;
 }
 
+void RayContainer::MakeLeaves() {
+    nLeafRays = innerRays.Size();
+}
+
 void RayContainer::RemoveTerminated(thrust::device_vector<unsigned int>& terminated) {
     // Verify that terminated has the correct size. Just in case and errors are
     // more important than CPU performance.
