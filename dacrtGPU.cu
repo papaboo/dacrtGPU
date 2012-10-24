@@ -26,7 +26,6 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/transform.h>
 #include <thrust/version.h>
 
 using std::cout;
@@ -66,41 +65,54 @@ void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
     }
 }
 
-__constant__ int d_samples;
-__constant__ float d_mod;
-template <bool COMBINE>
-struct FragsToColor {
-    float4* emissionDepth;
-    
-    FragsToColor(thrust::device_vector<float4>& ed, const int samples, const float mod)
-        : emissionDepth(thrust::raw_pointer_cast(ed.data())) {
-        cudaMemcpyToSymbol(d_samples, (void*)&samples, sizeof(int), 0, cudaMemcpyHostToDevice);
-        cudaMemcpyToSymbol(d_mod, (void*)&mod, sizeof(float), 0, cudaMemcpyHostToDevice);
-    }
+template <bool LERP>
+__global__
+void FragsToColorKernel(const float4* const emissions_bounces,
+                        float4* colors,
+                        const int samples,
+                        const float invSamples,
+                        const float modifier,
+                        const int nColors) {
 
-    __device__
-    float4 operator()(const float4 color, const unsigned int threadId) {
-        float3 eSum = make_float3(0.0f, 0.0f, 0.0f);
-        for (unsigned int e = threadId * d_samples; e < threadId * d_samples + d_samples; ++e)
-            eSum += make_float3(emissionDepth[e]);
-        
-        eSum /= d_samples;
-        return COMBINE ?
-            color * d_mod + make_float4(eSum.x, eSum.y, eSum.z, 0.0f)  *(1.0f -  d_mod) :
-            make_float4(eSum.x, eSum.y, eSum.z, threadId);
-    }
-};
+    const unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
+    if (id >= nColors) return;
+    
+    float3 eSum = make_float3(0.0f, 0.0f, 0.0f);
+    for (int e = id * samples; e < id * samples + samples; ++e)
+        // TODO this is highly non-coallesced, so should be optimized, but it's
+        // only a fraction of the total ray tracing cost.
+        eSum += make_float3(emissions_bounces[e]);
+    eSum *= invSamples;
+    
+    if (LERP) {
+        const float3 color = make_float3(colors[id]);
+        eSum = lerp(eSum, color, modifier);
+    } 
+
+    colors[id] = make_float4(eSum.x, eSum.y, eSum.z, id);
+}
 
 void CombineFragsAndColor(Fragments& frags,
                           thrust::device_vector<float4>& colors, 
                           const int samples, const float mod = 0.0f) {
+
+    struct cudaFuncAttributes funcAttr;
     if (mod == 0.0f) {
-        FragsToColor<false> fragsToColor(frags.emissionDepth, samples, mod);
-        thrust::transform(colors.begin(), colors.end(), thrust::counting_iterator<unsigned int>(0), colors.begin(), fragsToColor);
+        cudaFuncGetAttributes(&funcAttr, FragsToColorKernel<false>);
+        unsigned int blocksize = min(funcAttr.maxThreadsPerBlock, 256);
+        unsigned int blocks = (colors.size() / blocksize) + 1;
+        FragsToColorKernel<false><<<blocks, blocksize>>>
+            (RawPointer(frags.emissionDepth), RawPointer(colors),
+             samples, 1.0f / samples, mod, colors.size());
     } else {
-        FragsToColor<true> fragsToColor(frags.emissionDepth, samples, mod);
-        thrust::transform(colors.begin(), colors.end(), thrust::counting_iterator<unsigned int>(0), colors.begin(), fragsToColor);
+        cudaFuncGetAttributes(&funcAttr, FragsToColorKernel<true>);
+        unsigned int blocksize = min(funcAttr.maxThreadsPerBlock, 256);
+        unsigned int blocks = (colors.size() / blocksize) + 1;
+        FragsToColorKernel<true><<<blocks, blocksize>>>
+            (RawPointer(frags.emissionDepth), RawPointer(colors),
+             samples, 1.0f / samples, mod, colors.size());
     }
+    CHECK_FOR_CUDA_ERROR();
 }
 
 int main(int argc, char *argv[]){
