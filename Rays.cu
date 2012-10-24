@@ -51,7 +51,7 @@ void CreateRaysKernel(const int width, const int height, const int sqrtSamples,
     
     const float3 rayOrigin = camOrigin + 130.0f * rayDir;
     origins[index] = make_float4(rayOrigin, index);
-    directions[index] = make_float4(normalize(rayDir), 0.0f);
+    directions[index] = make_float4(normalize(rayDir), 1e30f);
 }
 
 Rays::Rays(const int width, const int height, const int sqrtSamples) {
