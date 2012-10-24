@@ -9,9 +9,8 @@
 #ifndef _GPU_DACRT_SPHERE_H_
 #define _GPU_DACRT_SPHERE_H_
 
+#include <Utils/Math.h>
 #include <Utils/ToString.h>
-
-#include <math_functions.h>
 
 #include <sstream>
 #include <iomanip>
