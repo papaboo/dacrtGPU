@@ -9,12 +9,13 @@
 #ifndef _GPU_DACRT_EXHAUSTIVE_INTERSECTION_H_
 #define _GPU_DACRT_EXHAUSTIVE_INTERSECTION_H_
 
-#include <IRayTracer.h>
+#include <Rendering/IRayTracer.h>
 
 #include <thrust/device_vector.h>
 
-class RayContainer;
 class SpheresGeometry;
+
+namespace Rendering {
 
 class ExhaustiveIntersection : public IRayTracer {
 private:
@@ -28,5 +29,7 @@ public:
     void FindIntersections(thrust::device_vector<unsigned int>& hits);
 
 };
+
+} // NS Rendering
 
 #endif

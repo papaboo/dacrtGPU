@@ -10,12 +10,12 @@
 // Compile ./make
 // Usage: ./build/DACRTPlane <samples> <iterations>
 
-#include <DacrtNode.h>
-#include <ExhaustiveIntersection.h>
 #include <Fragment.h>
-#include <MortonDacrtNode.h>
 #include <Meta/CUDA.h>
-#include <RayContainer.h>
+#include <Rendering/RayContainer.h>
+#include <Rendering/DacrtNode.h>
+#include <Rendering/ExhaustiveIntersection.h>
+#include <Rendering/MortonDacrtNode.h>
 #include <Shading.h>
 #include <SphereGeometry.h>
 #include <Utils/ToString.h>
@@ -41,11 +41,11 @@ int sqrtSamples;
 int samples;
 
 void RayTrace(Fragments& rayFrags, SpheresGeometry& spheres) {
-    RayContainer rays = RayContainer(WIDTH, HEIGHT, sqrtSamples);
+    Rendering::RayContainer rays = Rendering::RayContainer(WIDTH, HEIGHT, sqrtSamples);
 
-    MortonDacrtNodes tracer = MortonDacrtNodes(1);
-    //DacrtNodes tracer = DacrtNodes(1);
-    //ExhaustiveIntersection tracer;
+    static Rendering::MortonDacrtNodes tracer = Rendering::MortonDacrtNodes(1);
+    //static Rendering::DacrtNodes tracer = Rendering::DacrtNodes(1);
+    //static Rendering::ExhaustiveIntersection tracer;
     unsigned int bounce = 0;
     while (rays.InnerSize() > 0) {
         

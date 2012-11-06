@@ -9,7 +9,7 @@
 #ifndef _GPU_DACRT_NODE_H_
 #define _GPU_DACRT_NODE_H_
 
-#include <IRayTracer.h>
+#include <Rendering/IRayTracer.h>
 
 #include <thrust/device_vector.h>
 
@@ -17,9 +17,10 @@
 #include <ostream>
 
 class HyperCubes;
-class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
+
+namespace Rendering {
 
 struct DacrtNode {
     unsigned int rayStart, rayEnd;
@@ -36,10 +37,6 @@ struct DacrtNode {
     
     std::string ToString() const;
 };
-
-inline std::ostream& operator<<(std::ostream& s, const DacrtNode& n){
-    return s << n.ToString();
-}
 
 
 
@@ -128,9 +125,16 @@ private:
 
 };
 
-inline std::ostream& operator<<(std::ostream& s, const DacrtNodes& d){
+} // NS Rendering
+
+inline std::ostream& operator<<(std::ostream& s, const Rendering::DacrtNode& n){
+    return s << n.ToString();
+}
+
+inline std::ostream& operator<<(std::ostream& s, const Rendering::DacrtNodes& d){
     return s << d.ToString();
 }
+
 
 
 #endif // _GPU_DACRT_NODE_H_

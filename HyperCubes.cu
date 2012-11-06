@@ -8,8 +8,7 @@
 
 #include <HyperCubes.h>
 
-#include <DacrtNode.h>
-#include <Rays.h>
+#include <Rendering/DacrtNode.h>
 #include <Meta/CUDA.h>
 #include <Utils/Math.h>
 #include <Utils/ToString.h>
@@ -66,7 +65,7 @@ struct ReduceHyperCubes {
     }
 };
 
-void HyperCubes::ReduceCubes(Rays::Iterator rayBegin, Rays::Iterator rayEnd, 
+void HyperCubes::ReduceCubes(Rendering::Rays::Iterator rayBegin, Rendering::Rays::Iterator rayEnd, 
                              thrust::device_vector<uint2> rayPartitions,
                              const size_t cubes) {
 
@@ -87,7 +86,7 @@ void HyperCubes::ReduceCubes(Rays::Iterator rayBegin, Rays::Iterator rayEnd,
     // TODO Remove owners, at the least reduce by a partition start flag instead
     // e.g. |1|0|0|1|0|0|0|
     static thrust::device_vector<unsigned int> rayOwners(rayRange); rayOwners.resize(rayRange);
-    DacrtNodes::CalcOwners(rayPartitions.begin(), rayPartitions.end(), rayOwners);
+    Rendering::DacrtNodes::CalcOwners(rayPartitions.begin(), rayPartitions.end(), rayOwners);
 
     // Reduce on the GPU
     Iterator valuesBegin = 

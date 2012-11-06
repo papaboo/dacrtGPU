@@ -11,19 +11,24 @@
 
 #include <thrust/device_vector.h>
 
-class RayContainer;
 class SpheresGeometry;
 
-class IRayTracer {
-    /**
-     * Prepares the rays and geometry for intersection testing.
-     */
-    virtual void Create(RayContainer& rayContainer, SpheresGeometry& SphereContainer) = 0;
+namespace Rendering {
+
+    class RayContainer;
     
-    /**
-     * Performs the actual intersection tests between rays and geometry.
-     */
-    virtual void FindIntersections(thrust::device_vector<unsigned int>& hitIDs) = 0;
-};
+    class IRayTracer {
+        /**
+         * Prepares the rays and geometry for intersection testing.
+         */
+        virtual void Create(RayContainer& rayContainer, SpheresGeometry& SphereContainer) = 0;
+        
+        /**
+         * Performs the actual intersection tests between rays and geometry.
+         */
+        virtual void FindIntersections(thrust::device_vector<unsigned int>& hitIDs) = 0;
+    };
+    
+} // NS Rendering
 
 #endif // _GPU_DACRT_RAY_TRACER_INTERFACE_H_

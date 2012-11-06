@@ -9,7 +9,7 @@
 #ifndef _GPU_MORTON_DACRT_NODE_H_
 #define _GPU_MORTON_DACRT_NODE_H_
 
-#include <IRayTracer.h>
+#include <Rendering/IRayTracer.h>
 
 #include <thrust/device_vector.h>
 
@@ -17,9 +17,10 @@
 #include <ostream>
 
 class HyperCubes;
-class RayContainer;
 class SpheresGeometry;
 class SphereContainer;
+
+namespace Rendering {
 
 class MortonDacrtNodes : public virtual IRayTracer {
     thrust::device_vector<uint2> rayPartitions;
@@ -88,7 +89,9 @@ private:
     std::string PrintNode(const unsigned int id, const bool verbose = false) const;
 };
 
-inline std::ostream& operator<<(std::ostream& s, const MortonDacrtNodes& d){
+} // NS Rendering
+
+inline std::ostream& operator<<(std::ostream& s, const Rendering::MortonDacrtNodes& d){
     return s << d.ToString();
 }
 

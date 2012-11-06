@@ -21,22 +21,17 @@ SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}-arch=sm_12;")
 MESSAGE(STATUS "NVCC flags: ${CUDA_NVCC_FLAGS}")
 
 CUDA_ADD_EXECUTABLE(${PROJ_NAME}
-  DacrtNode.h
-  DacrtNode.cu
   dacrtGPU.cu
-  ExhaustiveIntersection.h
-  ExhaustiveIntersection.cu
   Fragment.h
   HyperCubes.h
   HyperCubes.cu
+  Kernels/ForEachWithOwners.h
   Kernels/ReduceMinMaxMortonCode.h
   Kernels/ReduceMinMaxMortonCode.cu
   Material.h
   Material.cu
   Meta/CUDA.h
   Meta/CUDA.cu
-  MortonDacrtNode.h
-  MortonDacrtNode.cu
   Primitives/AABB.h
   Primitives/Cone.h
   Primitives/HyperCube.h
@@ -45,10 +40,6 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   Primitives/Ray.h
   Primitives/Sphere.h
   Primitives/SphereCone.h
-  RayContainer.h
-  RayContainer.cu
-  Rays.h
-  Rays.cu
   Shading.h
   Shading.cu
   SphereContainer.h
@@ -61,7 +52,10 @@ CUDA_ADD_EXECUTABLE(${PROJ_NAME}
   Utils/Utils.h
 )
 
+SUBDIRS(Rendering)
+
 TARGET_LINK_LIBRARIES(${PROJ_NAME}
+  DACRT_Rendering
   ${CUDA_LIBRARIES} #cuda rt
 )
 

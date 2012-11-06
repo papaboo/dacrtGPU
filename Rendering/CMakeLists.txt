@@ -1,0 +1,13 @@
+CUDA_ADD_LIBRARY(DACRT_Rendering
+  DacrtNode.h
+  DacrtNode.cu
+  ExhaustiveIntersection.h
+  ExhaustiveIntersection.cu
+  IRayTracer.h
+  MortonDacrtNode.h
+  MortonDacrtNode.cu
+  RayContainer.h
+  RayContainer.cu
+  Rays.h
+  Rays.cu
+)

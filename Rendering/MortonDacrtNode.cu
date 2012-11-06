@@ -6,9 +6,9 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <MortonDacrtNode.h>
+#include <Rendering/MortonDacrtNode.h>
 
-#include <DacrtNode.h>
+#include <Rendering/DacrtNode.h>
 #include <HyperCubes.h>
 #include <Kernels/ReduceMinMaxMortonCode.h>
 #include <Meta/CUDA.h>
@@ -16,7 +16,7 @@
 #include <Primitives/SphereCone.h>
 #include <Primitives/HyperCube.h>
 #include <Primitives/MortonCode.h>
-#include <RayContainer.h>
+#include <Rendering/RayContainer.h>
 #include <SphereContainer.h>
 #include <SphereGeometry.h>
 #include <Utils/ToString.h>
@@ -31,6 +31,8 @@
 
 using std::cout;
 using std::endl;
+
+namespace Rendering {
 
 MortonDacrtNodes::MortonDacrtNodes(const size_t capacity) 
     : rayPartitions(capacity), nextRayPartitions(capacity), 
@@ -1138,3 +1140,5 @@ std::string MortonDacrtNodes::PrintNode(const unsigned int i, const bool verbose
     
     return out.str();
 }
+
+} // NS Rendering

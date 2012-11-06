@@ -11,7 +11,7 @@
 #include <Fragment.h>
 #include <Meta/CUDA.h>
 #include <Primitives/Sphere.h>
-#include <RayContainer.h>
+#include <Rendering/RayContainer.h>
 #include <SphereGeometry.h>
 #include <Utils/Random.h>
 
@@ -67,7 +67,7 @@ void ColorNormalsKernel(float4* rayOrigins,
  * After execution the hitIDs contains 0 for rays that bounced and 0 for
  * terminated rays.
  */
-void Shading::Normals(RayContainer& rays, 
+void Shading::Normals(Rendering::RayContainer& rays, 
                       thrust::device_vector<unsigned int>::iterator hitIDs,
                       SpheresGeometry& spheres, 
                       Fragments& frags) {
@@ -79,8 +79,8 @@ void Shading::Normals(RayContainer& rays,
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     unsigned int blocks = (nRays / blocksize) + 1;
     ColorNormalsKernel<<<blocks, blocksize>>>
-        (RawPointer(Rays::GetOrigins(rays.BeginLeafRays())),
-         RawPointer(Rays::GetDirections(rays.BeginLeafRays())),
+        (RawPointer(Rendering::Rays::GetOrigins(rays.BeginLeafRays())),
+         RawPointer(Rendering::Rays::GetDirections(rays.BeginLeafRays())),
          RawPointer(hitIDs), // Contains information about the new rays after 
          RawPointer(spheres.spheres),
          RawPointer(frags.emissionDepth), // result
@@ -212,7 +212,7 @@ void PathTraceKernel(float4* rayOrigins,
                        // would save a couple of writes.
 }
 
-void Shading::Shade(RayContainer& rays, 
+void Shading::Shade(Rendering::RayContainer& rays, 
                     thrust::device_vector<unsigned int>::iterator hitIDs,
                     SpheresGeometry& spheres,
                     Fragments& frags) {
@@ -227,8 +227,8 @@ void Shading::Shade(RayContainer& rays,
     unsigned int blocksize = funcAttr.maxThreadsPerBlock > 256 ? 256 : funcAttr.maxThreadsPerBlock;
     unsigned int blocks = (nRays / blocksize) + 1;
     PathTraceKernel<<<blocks, blocksize>>>
-        (RawPointer(Rays::GetOrigins(rays.BeginLeafRays())),
-         RawPointer(Rays::GetDirections(rays.BeginLeafRays())),
+        (RawPointer(Rendering::Rays::GetOrigins(rays.BeginLeafRays())),
+         RawPointer(Rendering::Rays::GetDirections(rays.BeginLeafRays())),
          RawPointer(hitIDs), // Contains information about the new rays after 
          RawPointer(spheres.spheres),
          RawPointer(spheres.materialIDs),

@@ -10,7 +10,7 @@
 #define _GPU_DACRT_HYPER_CUBES_H_
 
 #include <Primitives/HyperCube.h>
-#include <Rays.h>
+#include <Rendering/Rays.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -49,7 +49,7 @@ public:
           u(thrust::device_vector<float2>(size)),
           v(thrust::device_vector<float2>(size)) {}
     
-    void ReduceCubes(Rays::Iterator rayBegin, Rays::Iterator rayEnd, 
+    void ReduceCubes(Rendering::Rays::Iterator rayBegin, Rendering::Rays::Iterator rayEnd, 
                      thrust::device_vector<uint2> rayPartitions,
                      const size_t cubes);
 

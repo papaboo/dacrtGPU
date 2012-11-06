@@ -6,7 +6,7 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <Rays.h>
+#include <Rendering/Rays.h>
 
 #include <Meta/CUDA.h>
 #include <Utils/Random.h>
@@ -17,6 +17,8 @@
 
 #include <ostream>
 #include <iomanip>
+
+namespace Rendering {
 
 // TODO Adopted from a linearly indexed thrust operator. Could probably be speed
 // up as a 2D kernel.
@@ -139,3 +141,5 @@ std::string Rays::ToString() const {
             out << "\n" << GetAsHyperRay(i);
     return out.str();
 }
+
+} // NS Rendering

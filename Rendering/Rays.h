@@ -20,6 +20,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
 
+namespace Rendering {
 
 class Rays {
 public:
@@ -89,21 +90,21 @@ public:
     
 };
 
-inline std::ostream& operator<<(std::ostream& s, const Rays::Representation r){
+} // NS Rendering
+
+inline std::ostream& operator<<(std::ostream& s, const Rendering::Rays::Representation r){
     switch(r) {
-    case Rays::RayRepresentation:
+    case Rendering::Rays::RayRepresentation:
         return s << "Representation::Ray";
-    case Rays::HyperRayRepresentation:
+    case Rendering::Rays::HyperRayRepresentation:
         return s << "Representation::HyperRay";
     }
     
     return s << "UNKNOWN";
 }
 
-inline std::ostream& operator<<(std::ostream& s, const Rays& rs){
+inline std::ostream& operator<<(std::ostream& s, const Rendering::Rays& rs){
     return s << rs.ToString();
 }
-
-
 
 #endif // _GPU_DACRT_RAYS_H_

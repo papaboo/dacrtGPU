@@ -9,7 +9,9 @@
 #ifndef _GPU_DACRT_RAY_CONTAINER_H_
 #define _GPU_DACRT_RAY_CONTAINER_H_
 
-#include <Rays.h>
+#include <Rendering/Rays.h>
+
+namespace Rendering {
 
 class RayContainer {
 private:
@@ -81,7 +83,9 @@ public:
     std::string ToString() const;
 };
 
-inline std::ostream& operator<<(std::ostream& s, const RayContainer& rays){
+} // NS Rendering
+
+inline std::ostream& operator<<(std::ostream& s, const Rendering::RayContainer& rays){
     return s << rays.ToString();
 }
 

@@ -6,14 +6,14 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <DacrtNode.h>
+#include <Rendering/DacrtNode.h>
 
-#include <ForEachWithOwners.h>
+#include <Kernels/ForEachWithOwners.h>
 #include <HyperCubes.h>
 #include <Primitives/SphereCone.h>
 #include <Primitives/HyperCube.h>
-#include <Rays.h>
-#include <RayContainer.h>
+#include <Rendering/Rays.h>
+#include <Rendering/RayContainer.h>
 #include <SphereGeometry.h>
 #include <SphereContainer.h>
 #include <Utils/ToString.h>
@@ -27,6 +27,8 @@
 #include <thrust/transform.h>
 
 // *** DacrtNode ***
+
+namespace Rendering {
 
 std::string DacrtNode::ToString() const {
     std::ostringstream out;
@@ -885,3 +887,5 @@ std::string DacrtNodes::ToString(RayContainer& rays, SphereContainer& spheres) c
     return out.str();
     
 }
+
+} // NS Rendering

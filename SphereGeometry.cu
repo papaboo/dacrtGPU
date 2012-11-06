@@ -53,7 +53,7 @@ SpheresGeometry SpheresGeometry::CornellBox(const int n) {
         float radius = 1.25f + 1.75f * Rand01();
         float3 center = make_float3(10.0f + Rand01() * 80.0 , Rand01() * 80.0 , Rand01() * 100.0 + 50.0);
         hSpheres[9 + s] = Sphere(center, radius);
-        hMatIDs[9 + s] = 6;
+        hMatIDs[9 + s] = 4;
     }
     
     AABB bounds = AABB::Create(make_float3(1.0f, 0.0f, 0.0f), 

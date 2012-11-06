@@ -9,18 +9,21 @@
 #ifndef _GPU_DACRT_SHADING_H_
 #define _GPU_DACRT_SHADING_H_
 
-#include <Rays.h>
+#include <Rendering/Rays.h>
 
 #include <thrust/device_vector.h>
 
 class Fragments;
-class RayContainer;
 class SpheresGeometry;
+
+namespace Rendering {
+    class RayContainer;
+}
 
 class Shading {
 public:
 
-    static void Normals(RayContainer& rays, 
+    static void Normals(Rendering::RayContainer& rays, 
                         thrust::device_vector<unsigned int>::iterator hitIDs,
                         SpheresGeometry& spheres,
                         Fragments& frags);
@@ -33,7 +36,7 @@ public:
      * Once done all leaf rays rays will have been reinitialize and replaced
      * with new reflections, refraction and diffuse rays.
      */
-    static void Shade(RayContainer& rays, 
+    static void Shade(Rendering::RayContainer& rays, 
                       thrust::device_vector<unsigned int>::iterator hitIDs,
                       SpheresGeometry& spheres,
                       Fragments& frags);

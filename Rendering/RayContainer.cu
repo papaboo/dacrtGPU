@@ -7,7 +7,7 @@
 // -----------------------------------------------------------------------------
 
 #include <Meta/CUDA.h>
-#include <RayContainer.h>
+#include <Rendering/RayContainer.h>
 #include <Utils/ToString.h>
 
 #include <thrust/iterator/zip_iterator.h>
@@ -19,6 +19,8 @@
 
 #include <sstream>
 #include <stdexcept>
+
+namespace Rendering{
 
 void RayContainer::Clear() {
     innerRays.Resize(0);
@@ -242,4 +244,6 @@ std::string RayContainer::ToString() const {
         }
     }
     return out.str();
+}
+
 }

@@ -6,12 +6,14 @@
 // license for more detail.
 // -----------------------------------------------------------------------------
 
-#include <ExhaustiveIntersection.h>
+#include <Rendering/ExhaustiveIntersection.h>
 
 #include <Meta/CUDA.h>
 #include <Primitives/Sphere.h>
-#include <RayContainer.h>
+#include <Rendering/RayContainer.h>
 #include <SphereGeometry.h>
+
+namespace Rendering {
 
 void ExhaustiveIntersection::Create(RayContainer& rs, SpheresGeometry& ss) {
     rays = &rs;
@@ -67,3 +69,4 @@ void ExhaustiveIntersection::FindIntersections(thrust::device_vector<unsigned in
     CHECK_FOR_CUDA_ERROR();
 }
 
+} // NS Rendering
