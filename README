@@ -75,6 +75,9 @@ Move randomly generated numbers to the GPU
 
 TODO
 
+Let rays be created in screen space 'buckets', so instead of tracing the entire
+image each pass, we trace a smaller section with more coherent rays.
+
 DacrtNode: Can we do ray partitioning without converting them to hyper rays? 
 - Sort them by major axis.
 - Extend all ray dirs, so their major axis has length 1.0f? Then the split
@@ -85,16 +88,45 @@ DacrtNode: Can we do ray partitioning without converting them to hyper rays?
   as infinite to discourage its use. (Or use specialized kernels for each
   major axis, not that hard)
 - Proceed as usual with plane creation and intersection (but now without the
-  constant conversion trough a switch)
+  constant conversion through a switch)
+
+
+MortonDacrtNode:
+- Partition along the major axis first to reduce depth complexity of the cones.
+- A major problem with Dacrt is that nodes can and will overlap, fx
+
+\      /   /
+ \ C1 /   /
+  \__/___/
+   \ C0 /
+    \__/
+
+where C1 is actually a subset of C0, but due to vertical division they get
+separated. Unfortunately there is no encoding scheme / representation that can
+solve this. If I do depth partitioning then I run the risk of having one ray
+from C0 'survive' the first depth partition and move into C1, but due to it's
+origin it will not get partitioned together with the rest of the rays from C1. I
+need to find a way to solve this without resorting a lot of rays (at least only
+resort them inside their own respective morton cells). Something something where
+live rays 'register' themselves and do a binary search to find the partition
+that they belong to in the next round?
+
+
+Compute the bounds of the geometry and use it to do early ray termination before
+exhaustive intersection.
+
 
 The left/right indice arrays also encode the left/right side info. Can we use
 this instead of the PartitionSide arrays to save memory? Will it be just as fast?
 
+
+Try using planes as bounds instead of a cone. It provides a tighter bound, so
+lower memory requirements, but at a higher computational cost.
+
+
 Amortise geometry sorting cost by using a morton curve subdivision (everyone
 else is anyway)
 
-Amortise ray sorting cost by storing them in pixelwide packets (packets are
-always crap at the N'th trace, can we dynamically sort them semi optimal?)
 
 When only a few rays remain, don't parallellize intersection over all rays, but
 do it over geometry instead. (Not an issue as long as I'm doing my fixed bounce

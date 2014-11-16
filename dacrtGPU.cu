@@ -137,7 +137,7 @@ int main(int argc, char *argv[]){
         // Reset fragments on subsequent iterations
         if (i > 0) frags.Reset();
 
-        cout << "PASS " << (i+1) << endl;        
+        cout << "PASS " << (i+1) << " of " << iterations << endl;
         RayTrace(frags, geom);
         
         float mod = float(i) / (i+1.0f);

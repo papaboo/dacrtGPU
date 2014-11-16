@@ -1,4 +1,4 @@
-// Hyper ray abstraction
+// Raytracing materials
 // -----------------------------------------------------------------------------
 // Copyright (C) 2012, See authors
 //
@@ -34,6 +34,40 @@ inline std::ostream& operator<<(std::ostream& s, const Material& mat){
     return s << mat.ToString();
 }
 
+/**
+ * For use in CUDA kernels. The reason that I don;t just use thrust is that
+ * thrust iterators have a ginormous memory overhead. (percentage wise)
+ */
+class MaterialItr {
+private:
+    float4* emission_reflections;
+    float4* color_refractions;
+
+public:
+    
+    // MaterialItr()
+
+    inline float3 Emission() const { return make_float3(*emission_reflections); }
+    inline float Reflection() const { return (*emission_reflections).w; }
+    inline float3 Color() const { return make_float3(*color_refractions); }
+    inline float Refraction() const { return (*color_refractions).w; }
+    
+    inline void operator+=(const unsigned int i) { 
+        emission_reflections += i;
+        color_refractions += i;
+    }
+    
+    /**
+     * Only compares the emission/reflection pointer for equality. What are you
+     * gonna do?
+     */
+    inline bool operator==(const MaterialItr p) const {
+        return emission_reflections == p.emission_reflections;
+    }
+    inline bool operator!=(const MaterialItr p) const { 
+        return emission_reflections != p.emission_reflections;
+    }
+};
 
 class Materials {
 public:
@@ -62,7 +96,7 @@ public:
         emission_reflection[i] = make_float4(mat.emission, mat.reflection);
         color_refraction[i] = make_float4(mat.color, mat.refraction);
     }
-    
+
     std::string ToString() const;    
 };
 

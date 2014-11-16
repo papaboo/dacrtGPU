@@ -25,35 +25,40 @@ std::string SphereGeometry::ToString() const {
 
 SpheresGeometry SpheresGeometry::CornellBox(const int n) {
     // Create materials
-    Materials mats(7);
+    Materials mats(9);
     float3 zero3 = make_float3(0.0f, 0.0f, 0.0f);
     float3 gold = make_float3(0.8314f, 0.6863f, 0.2157f);
+    float3 lightGreen = make_float3(0.25f, 0.75f, 0.25f);
     mats.Set(0, Material(zero3, make_float3(0.75f, 0.75f, 0.75f), 0.0f, 0.0f)); // light grey
-    mats.Set(1, Material(zero3, make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red wall
-    mats.Set(2, Material(zero3, make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue wall
+    mats.Set(1, Material(zero3, make_float3(0.75f, 0.25f, 0.25f), 0.0f, 0.0f)); // red
+    mats.Set(2, Material(zero3, make_float3(0.25f, 0.25f, 0.75f), 0.0f, 0.0f)); // blue
     mats.Set(3, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 0.0f, 1.0f)); // glass ball
     mats.Set(4, Material(zero3, make_float3(0.999f, 0.999f, 0.999f), 1.0f, 0.0f)); // mirror ball
     mats.Set(5, Material(make_float3(12.0f,12.0f,12.0f), zero3, 0.0f, 0.0f)); // light
     mats.Set(6, Material(zero3, gold, 0.3f, 0.0f)); // gold
+    mats.Set(7, Material(zero3, make_float3(184, 115, 51) / 255.0f, 0.5f, 0.0f)); // reflecting copper
+    mats.Set(8, Material(zero3, lightGreen, 0.0f, 0.0f)); // light green
 
     // Create geometry
-    thrust::host_vector<Sphere> hSpheres(9 + n);
-    thrust::host_vector<unsigned int> hMatIDs(9 + n);
+    thrust::host_vector<Sphere> hSpheres(10 + n);
+    thrust::host_vector<unsigned int> hMatIDs(hSpheres.size());
     hSpheres[0] = Sphere(make_float3(1e5f+1.0f, 40.8f ,81.6f), 1e5f); hMatIDs[0] = 1;
     hSpheres[1] = Sphere(make_float3(-1e5+99, 40.8, 81.6), 1e5);      hMatIDs[1] = 2;
     hSpheres[2] = Sphere(make_float3(50,40.8, 1e5), 1e5);             hMatIDs[2] = 0;
     hSpheres[3] = Sphere(make_float3(50, 40.8, -1e5+170), 1e5);       hMatIDs[3] = 0;
-    hSpheres[4] = Sphere(make_float3(50, 1e5, 81.6), 1e5);            hMatIDs[4] = 0;
+    hSpheres[4] = Sphere(make_float3(50, 1e5, 81.6), 1e5);            hMatIDs[4] = 7;
     hSpheres[5] = Sphere(make_float3(50, -1e5+81.6, 81.6), 1e5);      hMatIDs[5] = 0;
     hSpheres[6] = Sphere(make_float3(50,681.6-.27,81.6), 600);        hMatIDs[6] = 5;
     hSpheres[7] = Sphere(make_float3(73,16.5,78), 16.5);              hMatIDs[7] = 3;
     hSpheres[8] = Sphere(make_float3(27,16.5,47), 16.5);              hMatIDs[8] = 4;
     
+    hSpheres[9] = Sphere(make_float3(50.0f, 1e5f+0.2f, 81.6f), 1e5);    hMatIDs[9] = 3;
+
     for (int s = 0; s < n; ++s) {
         float radius = 1.25f + 1.75f * Rand01();
         float3 center = make_float3(10.0f + Rand01() * 80.0 , Rand01() * 80.0 , Rand01() * 100.0 + 50.0);
-        hSpheres[9 + s] = Sphere(center, radius);
-        hMatIDs[9 + s] = 4;
+        hSpheres[10 + s] = Sphere(center, radius);
+        hMatIDs[10 + s] = 6;
     }
     
     AABB bounds = AABB::Create(make_float3(1.0f, 0.0f, 0.0f), 

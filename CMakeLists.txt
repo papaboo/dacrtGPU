@@ -15,7 +15,7 @@ INCLUDE_DIRECTORIES(.)
 
 # Find CUDA
 FIND_PACKAGE(CUDA REQUIRED)
-INCLUDE_DIRECTORIES(${CUDA_SDK_ROOT_DIR}/common/inc) #include common/inc for cutils
+#INCLUDE_DIRECTORIES(${CUDA_SDK_ROOT_DIR}/common/inc) #include common/inc for cutils. Doesn't exist after CUDA 5.0
 
 SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS}-arch=sm_12;")
 MESSAGE(STATUS "NVCC flags: ${CUDA_NVCC_FLAGS}")
